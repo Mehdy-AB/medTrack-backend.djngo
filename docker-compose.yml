@@ -1,0 +1,322 @@
+
+services:
+  # ============================================
+  # TRAEFIK - Reverse Proxy & Gateway
+  # ============================================
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "8090:8090"
+    volumes:
+      - ./infrastructure/traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./infrastructure/traefik/dynamic:/etc/traefik/dynamic:ro
+    networks:
+      - gateway
+      - backend
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=PathPrefix(`/dashboard`) || PathPrefix(`/api`)"
+      - "traefik.http.routers.dashboard.entrypoints=dashboard"
+      - "traefik.http.routers.dashboard.service=api@internal"
+    depends_on:
+      consul:
+        condition: service_healthy
+
+  # ============================================
+  # CONSUL - Service Registry & Health Checks
+  # ============================================
+  consul:
+    image: hashicorp/consul:1.18
+    container_name: consul
+    restart: unless-stopped
+    ports:
+      - "8500:8500"
+      - "8600:8600/udp"
+    volumes:
+      - ./infrastructure/consul/config.json:/consul/config/config.json:ro
+      - consul_data:/consul/data
+    networks:
+      - backend
+    command: agent -server -bootstrap-expect=1 -ui -client=0.0.0.0 -config-file=/consul/config/config.json
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8500/v1/status/leader"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ============================================
+  # RABBITMQ - Message Broker
+  # ============================================
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: rabbitmq
+    restart: unless-stopped
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    environment:
+      RABBITMQ_DEFAULT_USER: admin
+      RABBITMQ_DEFAULT_PASS: password
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ============================================
+  # POSTGRESQL - Database
+  # ============================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_MULTIPLE_DATABASES: "auth_db,profile_db,core_db,eval_db,comm_db"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init-multiple-databases.sh:/docker-entrypoint-initdb.d/init-multiple-databases.sh:ro
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # MICROSERVICES
+  # ============================================
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=auth-service
+      - DATABASE_NAME=auth_db
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=postgres
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASSWORD=password
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - SECRET_KEY=auth-secret-key-change-in-production
+    networks:
+      - gateway
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.auth.rule=PathPrefix(`/auth`)"
+      - "traefik.http.routers.auth.entrypoints=web"
+      - "traefik.http.services.auth.loadbalancer.server.port=8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  profile-service:
+    build:
+      context: ./services/profile-service
+      dockerfile: Dockerfile
+    container_name: profile-service
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=profile-service
+      - DATABASE_NAME=profile_db
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=postgres
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASSWORD=password
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - SECRET_KEY=profile-secret-key-change-in-production
+    networks:
+      - gateway
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.profile.rule=PathPrefix(`/profile`)"
+      - "traefik.http.routers.profile.entrypoints=web"
+      - "traefik.http.services.profile.loadbalancer.server.port=8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  core-service:
+    build:
+      context: ./services/core-service
+      dockerfile: Dockerfile
+    container_name: core-service
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=core-service
+      - DATABASE_NAME=core_db
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=postgres
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASSWORD=password
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - SECRET_KEY=core-secret-key-change-in-production
+    networks:
+      - gateway
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.core.rule=PathPrefix(`/core`)"
+      - "traefik.http.routers.core.entrypoints=web"
+      - "traefik.http.services.core.loadbalancer.server.port=8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  eval-service:
+    build:
+      context: ./services/eval-service
+      dockerfile: Dockerfile
+    container_name: eval-service
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=eval-service
+      - DATABASE_NAME=eval_db
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=postgres
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASSWORD=password
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - SECRET_KEY=eval-secret-key-change-in-production
+    networks:
+      - gateway
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.eval.rule=PathPrefix(`/eval`)"
+      - "traefik.http.routers.eval.entrypoints=web"
+      - "traefik.http.services.eval.loadbalancer.server.port=8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  comm-service:
+    build:
+      context: ./services/comm-service
+      dockerfile: Dockerfile
+    container_name: comm-service
+    restart: unless-stopped
+    environment:
+      - SERVICE_NAME=comm-service
+      - DATABASE_NAME=comm_db
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - DATABASE_USER=postgres
+      - DATABASE_PASSWORD=postgres
+      - RABBITMQ_HOST=rabbitmq
+      - RABBITMQ_USER=admin
+      - RABBITMQ_PASSWORD=password
+      - CONSUL_HOST=consul
+      - CONSUL_PORT=8500
+      - SECRET_KEY=comm-secret-key-change-in-production
+    networks:
+      - gateway
+      - backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      consul:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.comm.rule=PathPrefix(`/comm`)"
+      - "traefik.http.routers.comm.entrypoints=web"
+      - "traefik.http.services.comm.loadbalancer.server.port=8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  gateway:
+    driver: bridge
+    name: gateway
+  backend:
+    driver: bridge
+    name: backend
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  consul_data:
+  rabbitmq_data:
+  postgres_data:

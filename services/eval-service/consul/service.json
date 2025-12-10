@@ -1,0 +1,17 @@
+{
+    "service": {
+        "name": "eval-service",
+        "id": "eval-service-1",
+        "port": 8000,
+        "check": {
+            "http": "http://eval-service:8000/health",
+            "interval": "10s",
+            "timeout": "5s"
+        },
+        "tags": [
+            "django",
+            "microservice",
+            "eval"
+        ]
+    }
+}

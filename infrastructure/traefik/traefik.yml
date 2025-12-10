@@ -1,0 +1,36 @@
+# Traefik Static Configuration
+# ============================
+
+api:
+  dashboard: true
+  insecure: true
+
+ping:
+  entryPoint: web
+
+entryPoints:
+  web:
+    address: ":80"
+  dashboard:
+    address: ":8090"
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+  
+  consulCatalog:
+    endpoint:
+      address: "consul:8500"
+      scheme: "http"
+    prefix: "traefik"
+    exposedByDefault: false
+    refreshInterval: "15s"
+
+log:
+  level: INFO
+  format: common
+
+accessLog:
+  format: common
+  bufferingSize: 100

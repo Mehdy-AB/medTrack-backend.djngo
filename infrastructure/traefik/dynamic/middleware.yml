@@ -1,0 +1,57 @@
+# Traefik Dynamic Configuration - Middlewares
+# ============================================
+
+http:
+  middlewares:
+    # CORS Middleware
+    cors-headers:
+      headers:
+        accessControlAllowMethods:
+          - GET
+          - POST
+          - PUT
+          - PATCH
+          - DELETE
+          - OPTIONS
+        accessControlAllowHeaders:
+          - Content-Type
+          - Authorization
+          - X-Requested-With
+          - Accept
+          - Origin
+        accessControlAllowOriginList:
+          - "*"
+        accessControlMaxAge: 3600
+        addVaryHeader: true
+
+    # Compression Middleware
+    compress:
+      compress:
+        excludedContentTypes:
+          - text/event-stream
+
+    # Rate Limiting Middleware
+    rate-limit:
+      rateLimit:
+        average: 100
+        burst: 50
+        period: 1s
+
+    # Security Headers Middleware
+    security-headers:
+      headers:
+        frameDeny: true
+        contentTypeNosniff: true
+        browserXssFilter: true
+        referrerPolicy: "strict-origin-when-cross-origin"
+        customResponseHeaders:
+          X-Powered-By: ""
+          Server: ""
+
+    # Combined Middleware Chain
+    default-chain:
+      chain:
+        middlewares:
+          - cors-headers
+          - compress
+          - security-headers

@@ -1,0 +1,83 @@
+# Traefik Dynamic Configuration - Routers
+# ========================================
+# Service routes for microservices
+
+http:
+  routers:
+    # Auth Service Router
+    auth-router:
+      rule: "PathPrefix(`/auth`)"
+      entryPoints:
+        - web
+      service: auth-service
+      middlewares:
+        - default-chain
+
+    # Profile Service Router
+    profile-router:
+      rule: "PathPrefix(`/profile`)"
+      entryPoints:
+        - web
+      service: profile-service
+      middlewares:
+        - default-chain
+
+    # Core Service Router
+    core-router:
+      rule: "PathPrefix(`/core`)"
+      entryPoints:
+        - web
+      service: core-service
+      middlewares:
+        - default-chain
+
+    # Eval Service Router
+    eval-router:
+      rule: "PathPrefix(`/eval`)"
+      entryPoints:
+        - web
+      service: eval-service
+      middlewares:
+        - default-chain
+
+    # Comm Service Router
+    comm-router:
+      rule: "PathPrefix(`/comm`)"
+      entryPoints:
+        - web
+      service: comm-service
+      middlewares:
+        - default-chain
+
+  services:
+    auth-service:
+      loadBalancer:
+        servers:
+          - url: "http://auth-service:8000"
+
+    profile-service:
+      loadBalancer:
+        servers:
+          - url: "http://profile-service:8000"
+
+    core-service:
+      loadBalancer:
+        servers:
+          - url: "http://core-service:8000"
+
+    eval-service:
+      loadBalancer:
+        servers:
+          - url: "http://eval-service:8000"
+
+    comm-service:
+      loadBalancer:
+        servers:
+          - url: "http://comm-service:8000"
+
+  middlewares:
+    default-chain:
+      chain:
+        middlewares:
+          - cors-headers
+          - compress
