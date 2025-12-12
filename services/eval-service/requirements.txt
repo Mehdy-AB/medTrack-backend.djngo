@@ -18,3 +18,9 @@ django-prometheus==2.3.1
 
 # Utilities
 python-dotenv==1.0.0
+
+# JWT
+PyJWT==2.8.0
+
+# Filtering
+django-filter==23.5
