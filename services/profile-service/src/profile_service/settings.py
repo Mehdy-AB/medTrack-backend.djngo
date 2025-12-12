@@ -16,6 +16,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'rest_framework',
     'django_prometheus',
+    'profiles',
 ]
 
 MIDDLEWARE = [
