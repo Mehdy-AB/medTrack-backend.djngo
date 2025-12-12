@@ -23,6 +23,7 @@ MIDDLEWARE = [
     'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'profile_service.jwt_middleware.JWTAuthMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]

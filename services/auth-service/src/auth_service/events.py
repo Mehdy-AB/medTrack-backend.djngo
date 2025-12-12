@@ -1,338 +1,201 @@
 """
-Shared event definitions and RabbitMQ utilities for MedTrack microservices
-Copy this file to each microservice's src directory
+RabbitMQ event publisher for auth-service.
+Publishes user-related events to events.topic exchange.
 """
 import json
-import logging
 import pika
-from typing import Dict, Any, Callable
-from datetime import datetime
+import logging
+from datetime import datetime, timezone
+from django.conf import settings
+from typing import Dict, Any, Optional
 
 logger = logging.getLogger(__name__)
 
 
-# ============================================
-# EVENT TYPE DEFINITIONS
-# ============================================
+class EventPublisher:
+    """Publishes events to RabbitMQ."""
 
-class EventTypes:
-    """All event types in the system"""
+    EXCHANGE_NAME = 'events.topic'
+    EXCHANGE_TYPE = 'topic'
 
-    # AUTH-SERVICE events
-    USER_CREATED = "user.created"
-    USER_VERIFIED = "user.verified"
-    USER_PASSWORD_CHANGED = "user.password_changed"
-    USER_DELETED = "user.deleted"
-    USER_LOGIN = "user.login"
-    USER_LOGOUT = "user.logout"
+    # Event types
+    USER_CREATED = 'auth.user.created'
+    USER_UPDATED = 'auth.user.updated'
+    USER_ROLE_CHANGED = 'auth.user.role_changed'
+    SESSION_REVOKED = 'auth.session.revoked'
+    PASSWORD_CHANGED = 'auth.password.changed'
+    USER_DELETED = 'auth.user.deleted'
 
-    # PROFILE-SERVICE events
-    STUDENT_CREATED = "student.created"
-    STUDENT_UPDATED = "student.updated"
-    STUDENT_DELETED = "student.deleted"
-    ENCADRANT_CREATED = "encadrant.created"
-    ENCADRANT_UPDATED = "encadrant.updated"
-    ENCADRANT_DELETED = "encadrant.deleted"
-    ESTABLISHMENT_CREATED = "establishment.created"
-    ESTABLISHMENT_UPDATED = "establishment.updated"
-    SERVICE_CREATED = "service.created"
-    SERVICE_UPDATED = "service.updated"
+    def __init__(self):
+        self._connection = None
+        self._channel = None
 
-    # CORE-SERVICE events
-    OFFER_CREATED = "offer.created"
-    OFFER_UPDATED = "offer.updated"
-    OFFER_DELETED = "offer.deleted"
-    STAGE_CREATED = "stage.created"
-    STAGE_ACCEPTED = "stage.accepted"
-    STAGE_REJECTED = "stage.rejected"
-    STAGE_STARTED = "stage.started"
-    STAGE_COMPLETED = "stage.completed"
-    STAGE_CANCELLED = "stage.cancelled"
+    def _get_connection_params(self) -> pika.ConnectionParameters:
+        """Get RabbitMQ connection parameters from settings."""
+        return pika.ConnectionParameters(
+            host=getattr(settings, 'RABBITMQ_HOST', 'rabbitmq'),
+            port=getattr(settings, 'RABBITMQ_PORT', 5672),
+            credentials=pika.PlainCredentials(
+                getattr(settings, 'RABBITMQ_USER', 'admin'),
+                getattr(settings, 'RABBITMQ_PASSWORD', 'password')
+            ),
+            virtual_host=getattr(settings, 'RABBITMQ_VHOST', '/'),
+            connection_attempts=3,
+            retry_delay=2,
+        )
 
-    # COMM-SERVICE events
-    MESSAGE_SENT = "message.sent"
-    MESSAGE_READ = "message.read"
-    NOTIFICATION_CREATED = "notification.created"
-    DOCUMENT_UPLOADED = "document.uploaded"
-    DOCUMENT_DELETED = "document.deleted"
-    EMAIL_SENT = "email.sent"
-    EMAIL_FAILED = "email.failed"
-
-    # EVAL-SERVICE events
-    EVALUATION_CREATED = "evaluation.created"
-    EVALUATION_UPDATED = "evaluation.updated"
-    EVALUATION_DELETED = "evaluation.deleted"
-    GRADE_ASSIGNED = "grade.assigned"
-    ATTENDANCE_MARKED = "attendance.marked"
-
-
-# ============================================
-# RABBITMQ CLIENT
-# ============================================
-
-class RabbitMQClient:
-    """
-    RabbitMQ client for publishing and consuming events
-
-    Usage:
-        # Publish an event
-        rabbitmq = RabbitMQClient(host='rabbitmq', port=5672, user='admin', password='password')
-        rabbitmq.connect()
-        rabbitmq.publish_event('student.created', {'student_id': '123'}, 'profile-service')
-
-        # Consume events
-        def my_handler(event):
-            print(f"Received: {event}")
-
-        rabbitmq.declare_queue('my-service.events', ['student.*', 'user.created'])
-        rabbitmq.consume_events('my-service.events', my_handler)
-    """
-
-    EXCHANGE_NAME = "medtrack.events"
-    EXCHANGE_TYPE = "topic"
-
-    def __init__(self, host: str, port: int, user: str, password: str):
-        """
-        Initialize RabbitMQ client
-
-        Args:
-            host: RabbitMQ host
-            port: RabbitMQ port (usually 5672)
-            user: RabbitMQ username
-            password: RabbitMQ password
-        """
-        self.host = host
-        self.port = port
-        self.user = user
-        self.password = password
-        self.connection = None
-        self.channel = None
-
-    def connect(self):
-        """Establish connection to RabbitMQ"""
+    def _ensure_connection(self) -> None:
+        """Ensure RabbitMQ connection is established."""
         try:
-            credentials = pika.PlainCredentials(self.user, self.password)
-            parameters = pika.ConnectionParameters(
-                host=self.host,
-                port=self.port,
-                credentials=credentials,
-                heartbeat=600,
-                blocked_connection_timeout=300
-            )
-            self.connection = pika.BlockingConnection(parameters)
-            self.channel = self.connection.channel()
+            if self._connection is None or self._connection.is_closed:
+                self._connection = pika.BlockingConnection(
+                    self._get_connection_params()
+                )
+                self._channel = self._connection.channel()
 
-            # Declare exchange (topic exchange for routing)
-            self.channel.exchange_declare(
-                exchange=self.EXCHANGE_NAME,
-                exchange_type=self.EXCHANGE_TYPE,
-                durable=True
-            )
-
-            logger.info(f"✅ Connected to RabbitMQ at {self.host}:{self.port}")
-        except Exception as e:
-            logger.error(f"❌ Failed to connect to RabbitMQ: {e}")
+                # Declare exchange
+                self._channel.exchange_declare(
+                    exchange=self.EXCHANGE_NAME,
+                    exchange_type=self.EXCHANGE_TYPE,
+                    durable=True
+                )
+        except pika.exceptions.AMQPError as e:
+            logger.error(f"Failed to connect to RabbitMQ: {e}")
+            self._connection = None
+            self._channel = None
             raise
 
-    def publish_event(self, event_type: str, payload: Dict[str, Any], service_name: str):
+    def publish(self, routing_key: str, message: Dict[str, Any]) -> bool:
         """
-        Publish an event to RabbitMQ
+        Publish message to RabbitMQ.
 
         Args:
-            event_type: Event type (routing key) - e.g., "student.created"
-            payload: Event data as dictionary
-            service_name: Name of the service publishing the event
+            routing_key: Routing key (e.g., 'auth.user.created')
+            message: Message payload as dictionary
 
-        Example:
-            rabbitmq.publish_event(
-                event_type=EventTypes.STUDENT_CREATED,
-                payload={'student_id': '123', 'email': 'student@example.com'},
-                service_name='profile-service'
-            )
+        Returns:
+            True if published successfully, False otherwise
         """
-        if not self.channel:
-            self.connect()
-
-        # Create event envelope
-        event = {
-            "event_type": event_type,
-            "payload": payload,
-            "service": service_name,
-            "timestamp": datetime.utcnow().isoformat(),
-            "version": "1.0"
-        }
-
-        message = json.dumps(event)
-
         try:
-            self.channel.basic_publish(
+            self._ensure_connection()
+
+            # Add metadata to message
+            message['_meta'] = {
+                'timestamp': datetime.now(timezone.utc).isoformat(),
+                'routing_key': routing_key,
+                'source': 'auth-service',
+            }
+
+            self._channel.basic_publish(
                 exchange=self.EXCHANGE_NAME,
-                routing_key=event_type,
-                body=message,
+                routing_key=routing_key,
+                body=json.dumps(message, default=str),
                 properties=pika.BasicProperties(
-                    delivery_mode=2,  # Make message persistent
-                    content_type="application/json"
+                    content_type='application/json',
+                    delivery_mode=2,  # Persistent
                 )
             )
 
-            logger.info(f"📤 Published event: {event_type} from {service_name}")
+            logger.info(f"Published event: {routing_key}")
+            return True
+
         except Exception as e:
-            logger.error(f"❌ Failed to publish event {event_type}: {e}")
-            raise
+            logger.error(f"Failed to publish event {routing_key}: {e}")
+            return False
 
-    def declare_queue(self, queue_name: str, routing_keys: list):
-        """
-        Declare a queue and bind it to routing keys
-
-        Args:
-            queue_name: Name of the queue (e.g., 'comm.events')
-            routing_keys: List of routing patterns to subscribe to
-                         - Use exact match: "user.created"
-                         - Use wildcard: "student.*" (all student events)
-                         - Use multi-wildcard: "*.created" (all created events)
-
-        Example:
-            rabbitmq.declare_queue('comm.events', ['student.*', 'stage.*', 'user.created'])
-        """
-        if not self.channel:
-            self.connect()
-
-        # Declare durable queue (survives RabbitMQ restart)
-        self.channel.queue_declare(queue=queue_name, durable=True)
-
-        # Bind queue to exchange with routing keys
-        for routing_key in routing_keys:
-            self.channel.queue_bind(
-                exchange=self.EXCHANGE_NAME,
-                queue=queue_name,
-                routing_key=routing_key
-            )
-
-        logger.info(f"📥 Queue '{queue_name}' declared with bindings: {routing_keys}")
-
-    def consume_events(self, queue_name: str, callback: Callable[[Dict], None]):
-        """
-        Start consuming events from a queue
-
-        Args:
-            queue_name: Name of the queue to consume from
-            callback: Function to call for each event - receives event dict
-
-        Example:
-            def my_handler(event):
-                event_type = event['event_type']
-                payload = event['payload']
-                print(f"Got event: {event_type} with data: {payload}")
-
-            rabbitmq.consume_events('comm.events', my_handler)
-        """
-        if not self.channel:
-            self.connect()
-
-        def on_message(ch, method, properties, body):
-            """Internal message handler"""
-            try:
-                event = json.loads(body)
-                event_type = event.get('event_type', 'unknown')
-
-                logger.info(f"📨 Received event: {event_type}")
-
-                # Call the user's callback
-                callback(event)
-
-                # Acknowledge message (remove from queue)
-                ch.basic_ack(delivery_tag=method.delivery_tag)
-
-            except Exception as e:
-                logger.error(f"❌ Error processing event: {e}")
-                # Reject and requeue message (will be retried)
-                ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
-
-        # Process one message at a time (important for reliability)
-        self.channel.basic_qos(prefetch_count=1)
-
-        # Start consuming
-        self.channel.basic_consume(
-            queue=queue_name,
-            on_message_callback=on_message
-        )
-
-        logger.info(f"🔄 Starting event consumer for queue: {queue_name}")
-        logger.info("Press CTRL+C to stop")
-
-        try:
-            self.channel.start_consuming()
-        except KeyboardInterrupt:
-            logger.info("⛔ Consumer stopped by user")
-            self.stop_consuming()
-
-    def stop_consuming(self):
-        """Stop consuming events"""
-        if self.channel:
-            self.channel.stop_consuming()
-
-    def close(self):
-        """Close RabbitMQ connection"""
-        if self.connection and not self.connection.is_closed:
-            self.connection.close()
-            logger.info("🔌 RabbitMQ connection closed")
+    def close(self) -> None:
+        """Close RabbitMQ connection."""
+        if self._connection and not self._connection.is_closed:
+            self._connection.close()
+            self._connection = None
+            self._channel = None
 
 
-# ============================================
-# SINGLETON INSTANCE
-# ============================================
-
-_rabbitmq_client = None
+# Global publisher instance
+_publisher: Optional[EventPublisher] = None
 
 
-def get_rabbitmq_client(host: str = None, port: int = None, user: str = None, password: str = None) -> RabbitMQClient:
-    """
-    Get or create RabbitMQ client singleton
-
-    Args:
-        host: RabbitMQ host (optional, uses existing if None)
-        port: RabbitMQ port (optional)
-        user: RabbitMQ user (optional)
-        password: RabbitMQ password (optional)
-
-    Returns:
-        RabbitMQClient instance
-
-    Example:
-        # First call - creates client
-        rabbitmq = get_rabbitmq_client('rabbitmq', 5672, 'admin', 'password')
-
-        # Subsequent calls - returns same instance
-        rabbitmq = get_rabbitmq_client()
-    """
-    global _rabbitmq_client
-
-    if _rabbitmq_client is None:
-        if not all([host, port, user, password]):
-            raise ValueError("First call to get_rabbitmq_client requires all parameters")
-
-        _rabbitmq_client = RabbitMQClient(host, port, user, password)
-        _rabbitmq_client.connect()
-
-    return _rabbitmq_client
+def get_publisher() -> EventPublisher:
+    """Get or create global event publisher."""
+    global _publisher
+    if _publisher is None:
+        _publisher = EventPublisher()
+    return _publisher
 
 
-# ============================================
-# HELPER FUNCTIONS
-# ============================================
+def publish_user_created(user) -> bool:
+    """Publish USER_CREATED event."""
+    return get_publisher().publish(
+        EventPublisher.USER_CREATED,
+        {
+            'event_type': 'USER_CREATED',
+            'user_id': str(user.id),
+            'email': user.email,
+            'role': user.role,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+        }
+    )
 
-def publish_event(event_type: str, payload: Dict[str, Any], service_name: str):
-    """
-    Convenience function to publish an event using the singleton client
 
-    Example:
-        from events import publish_event, EventTypes
+def publish_user_updated(user, changed_fields: list = None) -> bool:
+    """Publish USER_UPDATED event."""
+    return get_publisher().publish(
+        EventPublisher.USER_UPDATED,
+        {
+            'event_type': 'USER_UPDATED',
+            'user_id': str(user.id),
+            'email': user.email,
+            'changed_fields': changed_fields or [],
+        }
+    )
 
-        publish_event(
-            event_type=EventTypes.STUDENT_CREATED,
-            payload={'student_id': str(student.id), 'email': student.email},
-            service_name='profile-service'
-        )
-    """
-    client = get_rabbitmq_client()
-    client.publish_event(event_type, payload, service_name)
+
+def publish_user_role_changed(user, old_role: str, new_role: str) -> bool:
+    """Publish USER_ROLE_CHANGED event."""
+    return get_publisher().publish(
+        EventPublisher.USER_ROLE_CHANGED,
+        {
+            'event_type': 'USER_ROLE_CHANGED',
+            'user_id': str(user.id),
+            'email': user.email,
+            'old_role': old_role,
+            'new_role': new_role,
+        }
+    )
+
+
+def publish_session_revoked(session, user) -> bool:
+    """Publish SESSION_REVOKED event."""
+    return get_publisher().publish(
+        EventPublisher.SESSION_REVOKED,
+        {
+            'event_type': 'SESSION_REVOKED',
+            'session_id': str(session.id),
+            'user_id': str(user.id),
+        }
+    )
+
+
+def publish_password_changed(user) -> bool:
+    """Publish PASSWORD_CHANGED event."""
+    return get_publisher().publish(
+        EventPublisher.PASSWORD_CHANGED,
+        {
+            'event_type': 'PASSWORD_CHANGED',
+            'user_id': str(user.id),
+            'email': user.email,
+        }
+    )
+
+
+def publish_user_deleted(user_id: str, email: str) -> bool:
+    """Publish USER_DELETED event."""
+    return get_publisher().publish(
+        EventPublisher.USER_DELETED,
+        {
+            'event_type': 'USER_DELETED',
+            'user_id': user_id,
+            'email': email,
+        }
+    )
