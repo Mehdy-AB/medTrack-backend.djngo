@@ -320,6 +320,7 @@ services:
       - CONSUL_PORT=8500
       - SECRET_KEY=eval-secret-key-change-in-production
       - JWT_SECRET_KEY=shared-jwt-secret-key-change-in-production-12345
+      - JWT_SECRET_KEY=shared-jwt-secret-key-change-in-production-12345
     networks:
       - gateway
       - backend

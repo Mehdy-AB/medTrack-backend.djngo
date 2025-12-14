@@ -16,6 +16,7 @@ from .serializers import (
     PaginatedEvaluations
 )
 from utils.event_publisher import get_attendance_publisher
+from utils.rbac import get_user_role, get_user_id
 
 
 def get_user_id_from_request(request):
@@ -196,7 +197,19 @@ class EvaluationViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['post'])
     def validate(self, request, pk=None):
-        """Validate or invalidate evaluation."""
+        """Validate or invalidate evaluation (encadrant/admin only)."""
+        # Only encadrants and admins can validate evaluations
+        role = get_user_role(request)
+        if role not in ['encadrant', 'admin']:
+            return Response(
+                {
+                    'error': 'Only encadrants and admins can validate evaluations',
+                    'required_roles': ['encadrant', 'admin'],
+                    'your_role': role
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         evaluation = self.get_object()
         serializer = ValidateEvaluationRequest(data=request.data)
         serializer.is_valid(raise_exception=True)

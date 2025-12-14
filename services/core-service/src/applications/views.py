@@ -15,6 +15,7 @@ from .serializers import (
 )
 from offers.models import Offer
 from utils.event_publisher import get_event_publisher
+from utils.rbac import get_user_role, get_user_id
 
 
 def get_user_id_from_request(request):
@@ -214,9 +215,20 @@ class ApplicationViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['patch'], url_path='status')
     def update_status(self, request, pk=None):
-        """Update application status (admin/encadrant only)."""
+        """Update application status (encadrant/admin only)."""
+        # Only encadrants and admins can accept/reject applications
+        role = get_user_role(request)
+        if role not in ['encadrant', 'admin']:
+            return Response(
+                {' error': 'Only encadrants and admins can accept/reject applications',
+                    'required_roles': ['encadrant', 'admin'],
+                    'your_role': role
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         application = self.get_object()
-        user_id = get_user_id_from_request(request)
+        user_id = get_user_id(request)
         
         serializer = UpdateApplicationStatusRequest(data=request.data)
         serializer.is_valid(raise_exception=True)

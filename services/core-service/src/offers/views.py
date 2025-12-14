@@ -14,6 +14,7 @@ from .serializers import (
     UpdateOfferRequest, OfferWithDetails
 )
 from utils.event_publisher import get_event_publisher
+from utils.rbac import require_roles, get_user_role, get_user_id
 
 
 def get_user_id_from_request(request):
@@ -104,7 +105,19 @@ class OfferViewSet(viewsets.ModelViewSet):
         return OfferSerializer
     
     def create(self, request):
-        """Create a new internship offer."""
+        """Create a new internship offer (encadrant/admin only)."""
+        # Check if user has permission to create offers
+        role = get_user_role(request)
+        if role not in ['encadrant', 'admin']:
+            return Response(
+                {
+                    'error': 'Only encadrants and admins can create offers',
+                    'required_roles': ['encadrant', 'admin'],
+                    'your_role': role
+                },
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         serializer = CreateOfferRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         
@@ -145,8 +158,20 @@ class OfferViewSet(viewsets.ModelViewSet):
     
     @action(detail=True, methods=['patch'], url_path='status')
     def update_status(self, request, pk=None):
-        """Update offer status."""
+        """Update offer status (creator/encadrant/admin only)."""
         offer = self.get_object()
+        
+        # Check permissions
+        role = get_user_role(request)
+        user_id = get_user_id(request)
+        
+        # Only creator, encadrants, or admins can update status
+        if role not in ['encadrant', 'admin'] and str(offer.created_by) != str(user_id):
+            return Response(
+                {'error': 'Only the offer creator or admins/encadrants can update status'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
         new_status = request.data.get('status')
         
         if not new_status:
