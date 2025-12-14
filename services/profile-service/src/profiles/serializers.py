@@ -38,9 +38,9 @@ class StudentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
         fields = [
-            'id', 'user_id', 'student_number', 'date_of_birth',
-            'university', 'program', 'year_level', 'extra',
-            'user_data', 'created_at', 'updated_at'
+            'id', 'user_id', 'cin', 'email', 'phone', 'first_name', 'last_name',
+            'student_number', 'date_of_birth', 'university', 'program', 'year_level',
+            'metadata', 'user_data', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -55,8 +55,9 @@ class StudentCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Student
         fields = [
-            'user_id', 'student_number', 'date_of_birth',
-            'university', 'program', 'year_level', 'extra'
+            'user_id', 'cin', 'email', 'phone', 'first_name', 'last_name',
+            'student_number', 'date_of_birth', 'university', 'program', 
+            'year_level', 'metadata'
         ]
 
 
@@ -69,9 +70,10 @@ class EncadrantSerializer(serializers.ModelSerializer):
     class Meta:
         model = Encadrant
         fields = [
-            'id', 'user_id', 'establishment', 'establishment_name',
-            'service', 'service_name', 'position', 'specialty',
-            'contact', 'user_data', 'created_at', 'updated_at'
+            'id', 'user_id', 'cin', 'email', 'phone', 'first_name', 'last_name',
+            'establishment', 'establishment_name', 'service', 'service_name', 
+            'position', 'speciality', 'metadata', 'user_data', 
+            'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -86,6 +88,6 @@ class EncadrantCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Encadrant
         fields = [
-            'user_id', 'establishment', 'service',
-            'position', 'specialty', 'contact'
+            'user_id', 'cin', 'email', 'phone', 'first_name', 'last_name',
+            'establishment', 'service', 'position', 'speciality', 'metadata'
         ]
