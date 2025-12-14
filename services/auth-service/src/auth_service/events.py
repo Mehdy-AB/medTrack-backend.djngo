@@ -5,6 +5,7 @@ Publishes user-related events to events.topic exchange.
 import json
 import pika
 import logging
+import time
 from datetime import datetime, timezone
 from django.conf import settings
 from typing import Dict, Any, Optional
@@ -76,32 +77,54 @@ class EventPublisher:
         Returns:
             True if published successfully, False otherwise
         """
-        try:
-            self._ensure_connection()
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                self._ensure_connection()
 
-            # Add metadata to message
-            message['_meta'] = {
-                'timestamp': datetime.now(timezone.utc).isoformat(),
-                'routing_key': routing_key,
-                'source': 'auth-service',
-            }
+                # Add metadata to message
+                message['_meta'] = {
+                    'timestamp': datetime.now(timezone.utc).isoformat(),
+                    'routing_key': routing_key,
+                    'source': 'auth-service',
+                }
 
-            self._channel.basic_publish(
-                exchange=self.EXCHANGE_NAME,
-                routing_key=routing_key,
-                body=json.dumps(message, default=str),
-                properties=pika.BasicProperties(
-                    content_type='application/json',
-                    delivery_mode=2,  # Persistent
+                self._channel.basic_publish(
+                    exchange=self.EXCHANGE_NAME,
+                    routing_key=routing_key,
+                    body=json.dumps(message, default=str),
+                    properties=pika.BasicProperties(
+                        content_type='application/json',
+                        delivery_mode=2,  # Persistent
+                    )
                 )
-            )
 
-            logger.info(f"Published event: {routing_key}")
-            return True
+                logger.info(f"Published event: {routing_key}")
+                return True
 
-        except Exception as e:
-            logger.error(f"Failed to publish event {routing_key}: {e}")
-            return False
+            except (pika.exceptions.AMQPError, pika.exceptions.AMQPConnectionError, ConnectionResetError, OSError) as e:
+                logger.warning(f"Publish attempt {attempt + 1} failed: {e}")
+                # Force reconnection on next attempt
+                self._connection = None
+                self._channel = None
+                if attempt == max_retries - 1:
+                    logger.error(f"Failed to publish event {routing_key} after {max_retries} attempts")
+                    return False
+                # Small delay before retry
+                time.sleep(0.5)
+            except Exception as e:
+                logger.error(f"Unexpected error publishing event {routing_key}: {e}")
+                # Also retry on unexpected errors (like StreamLostError)
+                self._connection = None
+                self._channel = None
+                if attempt < max_retries - 1:
+                    logger.warning(f"Retrying after unexpected error (attempt {attempt + 1}/{max_retries})")
+                    time.sleep(0.5)
+                else:
+                    logger.error(f"Failed to publish event {routing_key} after {max_retries} attempts")
+                    return False
+
+        return False
 
     def close(self) -> None:
         """Close RabbitMQ connection."""

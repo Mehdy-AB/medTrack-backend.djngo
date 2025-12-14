@@ -24,6 +24,7 @@ class UserCreateSerializer(serializers.Serializer):
     first_name = serializers.CharField(max_length=120, required=False, allow_blank=True)
     last_name = serializers.CharField(max_length=120, required=False, allow_blank=True)
     phone = serializers.CharField(max_length=30, required=False, allow_blank=True)
+    role = serializers.ChoiceField(choices=RoleChoices.choices, required=False, default='student')
     
     def validate_email(self, value):
         """Check email is unique."""

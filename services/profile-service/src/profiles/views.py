@@ -4,6 +4,7 @@ ViewSets for PROFILE-SERVICE endpoints
 from rest_framework import viewsets, status
 from rest_framework.decorators import action, api_view
 from rest_framework.response import Response
+from django.utils.decorators import method_decorator
 from .models import Establishment, Service, Student, Encadrant
 from .serializers import (
     EstablishmentSerializer, ServiceSerializer,
@@ -12,6 +13,7 @@ from .serializers import (
 )
 from .service_client import AuthServiceClient
 from .events import publish_event, EventTypes, get_rabbitmq_client
+from profile_service.jwt_middleware import require_role
 import os
 import logging
 
@@ -36,16 +38,17 @@ class EstablishmentViewSet(viewsets.ModelViewSet):
 
     Endpoints:
     - GET    /profile/api/establishments/        - List all establishments
-    - POST   /profile/api/establishments/        - Create establishment
+    - POST   /profile/api/establishments/        - Create establishment (encadrant only)
     - GET    /profile/api/establishments/{id}/   - Get specific establishment
-    - PUT    /profile/api/establishments/{id}/   - Update establishment
-    - PATCH  /profile/api/establishments/{id}/   - Partial update
-    - DELETE /profile/api/establishments/{id}/   - Delete establishment
+    - PUT    /profile/api/establishments/{id}/   - Update establishment (encadrant only)
+    - PATCH  /profile/api/establishments/{id}/   - Partial update (encadrant only)
+    - DELETE /profile/api/establishments/{id}/   - Delete establishment (encadrant only)
     - GET    /profile/api/establishments/by_city/{city}/ - Filter by city
     """
     queryset = Establishment.objects.all()
     serializer_class = EstablishmentSerializer
 
+    @require_role('encadrant')
     def create(self, request, *args, **kwargs):
         """Create establishment and publish establishment.created event"""
         response = super().create(request, *args, **kwargs)
@@ -73,6 +76,7 @@ class EstablishmentViewSet(viewsets.ModelViewSet):
 
         return response
 
+    @require_role('encadrant')
     def update(self, request, *args, **kwargs):
         """Update establishment and publish establishment.updated event"""
         response = super().update(request, *args, **kwargs)
@@ -100,6 +104,16 @@ class EstablishmentViewSet(viewsets.ModelViewSet):
 
         return response
 
+    @require_role('encadrant')
+    def partial_update(self, request, *args, **kwargs):
+        """Partial update - delegates to update method"""
+        return super().partial_update(request, *args, **kwargs)
+
+    @require_role('encadrant')
+    def destroy(self, request, *args, **kwargs):
+        """Delete establishment (encadrant only)"""
+        return super().destroy(request, *args, **kwargs)
+
     @action(detail=False, methods=['get'], url_path='by_city/(?P<city>[^/.]+)')
     def by_city(self, request, city=None):
         """Get establishments by city"""
@@ -114,16 +128,17 @@ class ServiceViewSet(viewsets.ModelViewSet):
 
     Endpoints:
     - GET    /profile/api/services/                      - List all services
-    - POST   /profile/api/services/                      - Create service
+    - POST   /profile/api/services/                      - Create service (encadrant only)
     - GET    /profile/api/services/{id}/                 - Get specific service
-    - PUT    /profile/api/services/{id}/                 - Update service
-    - PATCH  /profile/api/services/{id}/                 - Partial update
-    - DELETE /profile/api/services/{id}/                 - Delete service
+    - PUT    /profile/api/services/{id}/                 - Update service (encadrant only)
+    - PATCH  /profile/api/services/{id}/                 - Partial update (encadrant only)
+    - DELETE /profile/api/services/{id}/                 - Delete service (encadrant only)
     - GET    /profile/api/services/by_establishment/{establishment_id}/ - Filter by establishment
     """
     queryset = Service.objects.all()
     serializer_class = ServiceSerializer
 
+    @require_role('encadrant')
     def create(self, request, *args, **kwargs):
         """Create service and publish service.created event"""
         response = super().create(request, *args, **kwargs)
@@ -150,6 +165,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
 
         return response
 
+    @require_role('encadrant')
     def update(self, request, *args, **kwargs):
         """Update service and publish service.updated event"""
         response = super().update(request, *args, **kwargs)
@@ -175,6 +191,16 @@ class ServiceViewSet(viewsets.ModelViewSet):
             logger.error(f"Failed to publish service.updated event: {e}")
 
         return response
+
+    @require_role('encadrant')
+    def partial_update(self, request, *args, **kwargs):
+        """Partial update - delegates to update method"""
+        return super().partial_update(request, *args, **kwargs)
+
+    @require_role('encadrant')
+    def destroy(self, request, *args, **kwargs):
+        """Delete service (encadrant only)"""
+        return super().destroy(request, *args, **kwargs)
 
     @action(detail=False, methods=['get'], url_path='by_establishment/(?P<establishment_id>[^/.]+)')
     def by_establishment(self, request, establishment_id=None):

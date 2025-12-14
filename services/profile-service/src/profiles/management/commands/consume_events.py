@@ -56,19 +56,20 @@ class Command(BaseCommand):
             )
 
             # Declare queue and routing bindings
-            # PROFILE-SERVICE listens for user events to auto-create profiles
+            # PROFILE-SERVICE listens for AUTH-SERVICE events to auto-create profiles
+            # Using routing keys from AUTH_SERVICE_API.md
             routing_keys = [
-                'user.created',      # When user is created, create student/encadrant profile
-                'user.deleted',      # When user is deleted, delete associated profiles
-                'user.verified',     # Could update profile verification status
+                'auth.user.created',      # When user is created, create student/encadrant profile
+                'auth.user.deleted',      # When user is deleted, delete associated profiles
+                'auth.user.updated',      # When user is updated, could update profile data
             ]
 
             self.stdout.write(f"📥 Declaring queue: {queue_name}")
             self.stdout.write(f"🔗 Binding to routing keys: {', '.join(routing_keys)}")
             self.stdout.write('')
             self.stdout.write(self.style.WARNING('📌 Automatic Profile Creation:'))
-            self.stdout.write('   • user.created (role=student) → creates Student profile')
-            self.stdout.write('   • user.created (role=encadrant) → creates Encadrant profile')
+            self.stdout.write('   • auth.user.created (role=student) → creates Student profile')
+            self.stdout.write('   • auth.user.created (role=encadrant) → creates Encadrant profile')
             self.stdout.write('')
 
             rabbitmq.declare_queue(

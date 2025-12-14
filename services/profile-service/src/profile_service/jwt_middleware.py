@@ -156,28 +156,44 @@ class JWTAuthMiddleware:
 def require_role(*allowed_roles):
     """
     Decorator to require specific roles for a view.
-    
+
     Usage:
         @require_role('admin')
         def admin_only_view(request):
             ...
+
+        # For ViewSet methods:
+        @require_role('encadrant')
+        def create(self, request, *args, **kwargs):
+            ...
     """
+    from functools import wraps
+
     def decorator(view_func):
-        def wrapper(request, *args, **kwargs):
+        @wraps(view_func)
+        def wrapper(self_or_request, *args, **kwargs):
+            # Handle both function-based views and ViewSet methods
+            if hasattr(self_or_request, 'user_data'):
+                # Function-based view: first arg is request
+                request = self_or_request
+            else:
+                # ViewSet method: first arg is self, second is request
+                request = args[0] if args else kwargs.get('request')
+
             user_data = getattr(request, 'user_data', None)
             if not user_data:
                 return JsonResponse(
                     {'error': 'Authentication required', 'code': 'AUTH_REQUIRED'},
                     status=401
                 )
-            
+
             if user_data.get('role') not in allowed_roles:
                 return JsonResponse(
                     {'error': 'Insufficient permissions', 'code': 'FORBIDDEN'},
                     status=403
                 )
-            
-            return view_func(request, *args, **kwargs)
+
+            return view_func(self_or_request, *args, **kwargs)
         return wrapper
     return decorator
 

@@ -112,3 +112,17 @@ CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
 CELERY_RESULT_SERIALIZER = 'json'
 CELERY_TIMEZONE = 'UTC'
+
+# ============================================
+# RABBITMQ CONFIGURATION (Event Bus)
+# ============================================
+RABBITMQ_HOST = os.environ.get('RABBITMQ_HOST', 'rabbitmq')
+RABBITMQ_PORT = int(os.environ.get('RABBITMQ_PORT', 5672))
+RABBITMQ_USER = os.environ.get('RABBITMQ_USER', 'admin')
+RABBITMQ_PASSWORD = os.environ.get('RABBITMQ_PASSWORD', 'password')
+
+# ============================================
+# CONSUL CONFIGURATION (Service Discovery)
+# ============================================
+CONSUL_HOST = os.environ.get('CONSUL_HOST', 'consul')
+CONSUL_PORT = int(os.environ.get('CONSUL_PORT', 8500))

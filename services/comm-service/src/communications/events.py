@@ -88,7 +88,7 @@ class RabbitMQClient:
         rabbitmq.consume_events('my-service.events', my_handler)
     """
 
-    EXCHANGE_NAME = "medtrack.events"
+    EXCHANGE_NAME = "events.topic"
     EXCHANGE_TYPE = "topic"
 
     def __init__(self, host: str, port: int, user: str, password: str):

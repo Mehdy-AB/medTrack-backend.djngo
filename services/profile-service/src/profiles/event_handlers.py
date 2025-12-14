@@ -15,32 +15,34 @@ logger = logging.getLogger(__name__)
 
 def handle_user_created(event: dict):
     """
-    Handle user.created event from AUTH-SERVICE or external service
+    Handle USER_CREATED event from AUTH-SERVICE
 
-    When a user is created by your friend's service or AUTH-SERVICE,
-    automatically create the appropriate profile based on role.
+    Routing key: auth.user.created
 
-    Event payload:
+    Event structure from AUTH-SERVICE:
     {
+        "event_type": "USER_CREATED",
         "user_id": "uuid",
         "email": "user@example.com",
         "role": "student" or "encadrant" or "admin",
         "first_name": "John",
         "last_name": "Doe",
-        "phone": "+1234567890",
-        "cin": "AB123456" (optional, for students)
+        "_meta": {
+            "timestamp": "2025-12-12T16:00:00Z",
+            "routing_key": "auth.user.created",
+            "source": "auth-service"
+        }
     }
     """
-    payload = event['payload']
-    user_id = payload['user_id']
-    email = payload['email']
-    role = payload.get('role', 'student')
-    first_name = payload.get('first_name', '')
-    last_name = payload.get('last_name', '')
-    phone = payload.get('phone', '')
-    cin = payload.get('cin')
+    # AUTH-SERVICE uses flat event structure (not nested payload)
+    user_id = event.get('user_id')
+    email = event.get('email')
+    role = event.get('role', 'student')
+    first_name = event.get('first_name', '')
+    last_name = event.get('last_name', '')
+    phone = event.get('phone', '')
 
-    logger.info(f"👤 Processing user.created for {email} with role: {role}")
+    logger.info(f"👤 Processing USER_CREATED (auth.user.created) for {email} with role: {role}")
 
     try:
         if role == 'student':
@@ -52,14 +54,13 @@ def handle_user_created(event: dict):
             # Create student profile
             student = Student.objects.create(
                 user_id=user_id,
-                cin=cin or f"AUTO-{user_id[:8]}",  # Auto-generate CIN if not provided
                 email=email,
                 phone=phone,
                 first_name=first_name,
                 last_name=last_name,
                 metadata={
                     'created_from_event': True,
-                    'source_service': event.get('service', 'unknown')
+                    'source_service': event.get('_meta', {}).get('source', 'auth-service')
                 }
             )
 
@@ -184,9 +185,10 @@ def handle_user_deleted(event: dict):
 # EVENT ROUTER
 # ============================================
 
+# Map AUTH-SERVICE event types to handlers
 EVENT_HANDLERS = {
-    EventTypes.USER_CREATED: handle_user_created,
-    EventTypes.USER_DELETED: handle_user_deleted,
+    'USER_CREATED': handle_user_created,
+    'USER_DELETED': handle_user_deleted,
 }
 
 
@@ -195,19 +197,23 @@ def route_event(event: dict):
     Route incoming event to appropriate handler
 
     Args:
-        event: Event dictionary with structure:
+        event: Event dictionary from AUTH-SERVICE with structure:
             {
-                "event_type": "user.created",
-                "payload": {...},
-                "service": "auth-service",
-                "timestamp": "2025-01-15T10:00:00Z",
-                "version": "1.0"
+                "event_type": "USER_CREATED",
+                "user_id": "uuid",
+                "email": "...",
+                "role": "student",
+                "_meta": {
+                    "timestamp": "...",
+                    "routing_key": "auth.user.created",
+                    "source": "auth-service"
+                }
             }
     """
     event_type = event.get('event_type')
-    service = event.get('service', 'unknown')
+    source = event.get('_meta', {}).get('source', 'unknown')
 
-    logger.info(f"🔀 Routing event: {event_type} from {service}")
+    logger.info(f"🔀 Routing event: {event_type} from {source}")
 
     handler = EVENT_HANDLERS.get(event_type)
 

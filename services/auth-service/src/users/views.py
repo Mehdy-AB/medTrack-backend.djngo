@@ -84,21 +84,21 @@ def login(request):
     try:
         user = User.objects.get(email__iexact=email)
     except User.DoesNotExist:
-        AuditLog.log('LOGIN_FAILED', action='Invalid credentials', details={'email': email})
+        AuditLog.log(action='Invalid credentials', details={'email': email})
         return Response(
             {'error': 'Invalid credentials', 'code': 'INVALID_CREDENTIALS'},
             status=status.HTTP_401_UNAUTHORIZED
         )
     
     if not user.is_active:
-        AuditLog.log('LOGIN_FAILED', user=user, action='Account disabled')
+        AuditLog.log(action='Account disabled', user=user)
         return Response(
             {'error': 'Account is disabled', 'code': 'ACCOUNT_DISABLED'},
             status=status.HTTP_401_UNAUTHORIZED
         )
     
     if not user.check_password(password):
-        AuditLog.log('LOGIN_FAILED', user=user, action='Invalid password')
+        AuditLog.log(action='Invalid password', user=user)
         return Response(
             {'error': 'Invalid credentials', 'code': 'INVALID_CREDENTIALS'},
             status=status.HTTP_401_UNAUTHORIZED
@@ -107,7 +107,7 @@ def login(request):
     # Generate tokens
     response_data = get_tokens_response(user, request)
     
-    AuditLog.log('LOGIN_SUCCESS', user=user, action='User logged in')
+    AuditLog.log(action='User logged in', user=user)
     
     return Response(response_data, status=status.HTTP_200_OK)
 
@@ -132,9 +132,8 @@ def register(request):
     response_data = get_tokens_response(user, request)
     
     AuditLog.log(
-        'USER_REGISTERED',
-        user=user,
         action='User registered',
+        user=user,
         entity='User',
         entity_id=user.id
     )
@@ -232,9 +231,8 @@ def current_user(request):
         user.save()
         publish_user_updated(user, changed_fields)
         AuditLog.log(
-            'PROFILE_UPDATED',
-            user=user,
             action='Profile updated',
+            user=user,
             entity='User',
             entity_id=user.id,
             details={'changed_fields': changed_fields}
@@ -274,9 +272,8 @@ def change_password(request):
     
     publish_password_changed(user)
     AuditLog.log(
-        'PASSWORD_CHANGED',
-        user=user,
         action='Password changed',
+        user=user,
         entity='User',
         entity_id=user.id
     )
@@ -367,9 +364,8 @@ def user_detail(request, user_id):
         user.delete()
         publish_user_deleted(user_id_str, email)
         AuditLog.log(
-            'USER_DELETED',
-            user=get_current_user(request),
             action='User deleted',
+            user=get_current_user(request),
             entity='User',
             entity_id=user_id,
             details={'deleted_email': email}
@@ -398,9 +394,8 @@ def user_detail(request, user_id):
             publish_user_updated(user, changed_fields)
         
         AuditLog.log(
-            'USER_UPDATED',
-            user=get_current_user(request),
             action='User updated by admin',
+            user=get_current_user(request),
             entity='User',
             entity_id=user.id,
             details={'changed_fields': changed_fields}
@@ -458,9 +453,8 @@ def revoke_session(request, session_id):
     
     publish_session_revoked(session, user)
     AuditLog.log(
-        'SESSION_REVOKED',
-        user=user,
         action='Session revoked',
+        user=user,
         entity='Session',
         entity_id=session.id
     )

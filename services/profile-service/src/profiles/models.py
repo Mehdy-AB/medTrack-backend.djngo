@@ -55,12 +55,17 @@ class Student(models.Model):
     """Student profiles - references user_id from auth-service"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user_id = models.UUIDField(unique=True, db_index=True)  # Reference to auth.users.id (no FK)
+    cin = models.CharField(max_length=64, unique=True, blank=True, null=True)  # National ID
+    email = models.EmailField(max_length=255, blank=True, null=True)
+    phone = models.CharField(max_length=50, blank=True, null=True)
+    first_name = models.CharField(max_length=255, blank=True, null=True)
+    last_name = models.CharField(max_length=255, blank=True, null=True)
     student_number = models.CharField(max_length=64, unique=True, blank=True, null=True)
     date_of_birth = models.DateField(blank=True, null=True)
     university = models.CharField(max_length=255, blank=True, null=True)
     program = models.CharField(max_length=255, blank=True, null=True)
     year_level = models.IntegerField(blank=True, null=True)
-    extra = models.JSONField(default=dict, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)  # Changed from 'extra' to 'metadata' for consistency
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -78,6 +83,11 @@ class Encadrant(models.Model):
     """Supervisor/Mentor profiles - references user_id from auth-service"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     user_id = models.UUIDField(unique=True, db_index=True)  # Reference to auth.users.id (no FK)
+    cin = models.CharField(max_length=64, unique=True, blank=True, null=True)  # National ID
+    email = models.EmailField(max_length=255, blank=True, null=True)
+    phone = models.CharField(max_length=50, blank=True, null=True)
+    first_name = models.CharField(max_length=255, blank=True, null=True)
+    last_name = models.CharField(max_length=255, blank=True, null=True)
     establishment = models.ForeignKey(
         Establishment,
         on_delete=models.SET_NULL,
@@ -93,8 +103,8 @@ class Encadrant(models.Model):
         related_name='encadrants'
     )
     position = models.CharField(max_length=255, blank=True, null=True)
-    specialty = models.CharField(max_length=255, blank=True, null=True)
-    contact = models.JSONField(default=dict, blank=True)
+    speciality = models.CharField(max_length=255, blank=True, null=True)  # Changed from 'specialty' for consistency
+    metadata = models.JSONField(default=dict, blank=True)  # Changed from 'contact' to 'metadata'
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

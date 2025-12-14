@@ -84,3 +84,16 @@ LOGGING = {
 }
 
 SERVICE_NAME = os.environ.get('SERVICE_NAME', 'profile-service')
+SERVICE_HOST = os.environ.get('SERVICE_HOST', 'profile-service')
+SERVICE_PORT = int(os.environ.get('SERVICE_PORT', 8002))
+
+# RabbitMQ Configuration (for event-driven architecture)
+RABBITMQ_HOST = os.environ.get('RABBITMQ_HOST', 'rabbitmq')
+RABBITMQ_PORT = int(os.environ.get('RABBITMQ_PORT', 5672))
+RABBITMQ_USER = os.environ.get('RABBITMQ_USER', 'admin')
+RABBITMQ_PASSWORD = os.environ.get('RABBITMQ_PASSWORD', 'password')
+RABBITMQ_VHOST = os.environ.get('RABBITMQ_VHOST', '/')
+
+# Consul Configuration (for service discovery)
+CONSUL_HOST = os.environ.get('CONSUL_HOST', 'consul')
+CONSUL_PORT = int(os.environ.get('CONSUL_PORT', 8500))
