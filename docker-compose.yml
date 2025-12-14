@@ -234,7 +234,7 @@ services:
       dockerfile: ../Dockerfile.workers
     container_name: profile-service-consumer
     restart: unless-stopped
-    command: python profile-service-consumer.py
+    command: python -u profile-service-consumer.py
     environment:
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672
@@ -390,7 +390,7 @@ services:
       dockerfile: ../Dockerfile.workers
     container_name: comm-service-consumer
     restart: unless-stopped
-    command: python comm-service-consumer.py
+    command: python -u comm-service-consumer.py
     environment:
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672
@@ -410,7 +410,7 @@ services:
       dockerfile: Dockerfile
     container_name: eval-service-consumer
     restart: unless-stopped
-    command: python consumer.py
+    command: python -u consumer.py
     environment:
       - RABBITMQ_HOST=rabbitmq
       - RABBITMQ_PORT=5672
