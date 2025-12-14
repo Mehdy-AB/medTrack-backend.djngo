@@ -8,5 +8,6 @@ urlpatterns = [
     path('', include('django_prometheus.urls')),
     path('comm/', include([
         path('health', health_check, name='comm-health'),
+        path('', include('communications.urls')),
     ])),
 ]

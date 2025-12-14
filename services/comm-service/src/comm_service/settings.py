@@ -9,17 +9,21 @@ DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 ALLOWED_HOSTS = ['*']
 
 INSTALLED_APPS = [
+    'daphne',
     'django.contrib.contenttypes',
     'django.contrib.auth',
     'corsheaders',
     'rest_framework',
+    'channels',
     'django_prometheus',
+    'communications',
 ]
 
 MIDDLEWARE = [
     'django_prometheus.middleware.PrometheusBeforeMiddleware',
     'corsheaders.middleware.CorsMiddleware',
     'django.middleware.common.CommonMiddleware',
+    'comm_service.jwt_middleware.JWTAuthMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django_prometheus.middleware.PrometheusAfterMiddleware',
 ]
@@ -36,6 +40,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'comm_service.wsgi.application'
+ASGI_APPLICATION = 'comm_service.asgi.application'
 
 DATABASES = {
     'default': {
@@ -74,3 +79,50 @@ LOGGING = {
 }
 
 SERVICE_NAME = os.environ.get('SERVICE_NAME', 'comm-service')
+
+# ============================================
+# CHANNELS & WEBSOCKET CONFIGURATION
+# ============================================
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels_redis.core.RedisChannelLayer',
+        'CONFIG': {
+            'hosts': [
+                f"redis://:{os.environ.get('REDIS_PASSWORD', 'redispassword')}@{os.environ.get('REDIS_HOST', 'redis')}:{os.environ.get('REDIS_PORT', 6379)}/0"
+            ],
+        },
+    },
+}
+
+# ============================================
+# MINIO / S3 STORAGE CONFIGURATION
+# ============================================
+MINIO_ENDPOINT = os.environ.get('MINIO_ENDPOINT', 'minio:9000')
+MINIO_ACCESS_KEY = os.environ.get('MINIO_ACCESS_KEY', 'minioadmin')
+MINIO_SECRET_KEY = os.environ.get('MINIO_SECRET_KEY', 'minioadmin123')
+MINIO_BUCKET = os.environ.get('MINIO_BUCKET', 'medtrack-documents')
+MINIO_USE_SSL = os.environ.get('MINIO_USE_SSL', 'false').lower() == 'true'
+
+# ============================================
+# CELERY CONFIGURATION
+# ============================================
+CELERY_BROKER_URL = f"redis://:{os.environ.get('REDIS_PASSWORD', 'redispassword')}@{os.environ.get('REDIS_HOST', 'redis')}:{os.environ.get('REDIS_PORT', 6379)}/0"
+CELERY_RESULT_BACKEND = f"redis://:{os.environ.get('REDIS_PASSWORD', 'redispassword')}@{os.environ.get('REDIS_HOST', 'redis')}:{os.environ.get('REDIS_PORT', 6379)}/0"
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = 'UTC'
+
+# ============================================
+# RABBITMQ CONFIGURATION (Event Bus)
+# ============================================
+RABBITMQ_HOST = os.environ.get('RABBITMQ_HOST', 'rabbitmq')
+RABBITMQ_PORT = int(os.environ.get('RABBITMQ_PORT', 5672))
+RABBITMQ_USER = os.environ.get('RABBITMQ_USER', 'admin')
+RABBITMQ_PASSWORD = os.environ.get('RABBITMQ_PASSWORD', 'password')
+
+# ============================================
+# CONSUL CONFIGURATION (Service Discovery)
+# ============================================
+CONSUL_HOST = os.environ.get('CONSUL_HOST', 'consul')
+CONSUL_PORT = int(os.environ.get('CONSUL_PORT', 8500))

@@ -18,4 +18,4 @@ EXPOSE 8000
 
 CMD python manage.py migrate --noinput && \
     python register_service.py && \
-    gunicorn comm_service.wsgi:application --bind 0.0.0.0:8000 --workers 2 --threads 4
+    daphne -b 0.0.0.0 -p 8000 comm_service.asgi:application

@@ -14,8 +14,9 @@ urlpatterns = [
     # Prometheus django metrics
     path('', include('django_prometheus.urls')),
     
-    # Auth service specific routes will go here
-    path('auth/', include([
-        path('health', health_check, name='auth-health'),
-    ])),
+    # Auth API v1
+    path('auth/api/v1/', include('users.urls')),
+    
+    # Also support /auth/health for Traefik routing
+    path('auth/health', health_check, name='auth-health'),
 ]
