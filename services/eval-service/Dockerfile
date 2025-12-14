@@ -12,6 +12,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/ .
 COPY register_service.py .
+COPY consumer.py .
 COPY consul/ ./consul/
 
 EXPOSE 8000

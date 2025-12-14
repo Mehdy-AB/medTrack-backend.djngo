@@ -10,7 +10,7 @@ class Evaluation(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     student_id = models.UUIDField()
     offer_id = models.UUIDField()
-    evaluator_id = models.UUIDField(help_text="Encadrant user ID")
+    evaluator_id = models.UUIDField(null=True, blank=True, help_text="Encadrant user ID")
     grade = models.DecimalField(
         max_digits=5, 
         decimal_places=2, 
@@ -26,7 +26,7 @@ class Evaluation(models.Model):
     metadata = models.JSONField(null=True, blank=True)
     
     class Meta:
-        db_table = 'eval"."evaluations'
+        db_table = 'evaluations'
         ordering = ['-submitted_at']
         indexes = [
             models.Index(fields=['student_id']),
@@ -58,7 +58,7 @@ class EvaluationSection(models.Model):
     comments = models.TextField(null=True, blank=True)
     
     class Meta:
-        db_table = 'eval"."evaluation_sections'
+        db_table = 'evaluation_sections'
         indexes = [
             models.Index(fields=['evaluation']),
         ]

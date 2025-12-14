@@ -37,6 +37,7 @@ class CreateEvaluationRequest(serializers.Serializer):
     """Request serializer for creating evaluation."""
     student_id = serializers.UUIDField()
     offer_id = serializers.UUIDField()
+    evaluator_id = serializers.UUIDField(required=False)  # Optional for testing
     grade = serializers.DecimalField(max_digits=5, decimal_places=2, required=False, allow_null=True, min_value=0, max_value=20)
     comments = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     sections = CreateEvaluationSectionRequest(many=True, required=False)

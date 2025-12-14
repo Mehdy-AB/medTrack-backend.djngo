@@ -14,6 +14,7 @@ from .serializers import (
     UpdateApplicationStatusRequest
 )
 from offers.models import Offer
+from utils.event_publisher import get_event_publisher
 
 
 def get_user_id_from_request(request):
@@ -79,35 +80,51 @@ class ApplicationViewSet(viewsets.ModelViewSet):
             return UpdateApplicationRequest
         return ApplicationSerializer
     
-    def create(self, request, *args, **kwargs):
-        """Create application with student_id from JWT."""
-        serializer = self.get_serializer(data=request.data)
+    def create(self, request):
+        """Create a new application."""
+        serializer = CreateApplicationRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         
-        # Get student_id from JWT
         user_id = get_user_id_from_request(request)
-        if not user_id:
-            return Response(
-                {'error': 'Authentication required'},
-                status=status.HTTP_401_UNAUTHORIZED
-            )
         
-        # Get offer
-        offer = Offer.objects.get(id=serializer.validated_data['offer_id'])
+        # Verify offer exists and is active
+        try:
+            offer = Offer.objects.get(id=serializer.validated_data['offer_id'])
+            if not offer.is_active:
+                return Response(
+                    {'error': 'This offer is not currently accepting applications'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+        except Offer.DoesNotExist:
+            return Response(
+                {'error': 'Offer not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
         
         # Create application
         application = Application.objects.create(
+            student_id=user_id or serializer.validated_data.get('student_id'),
             offer=offer,
-            student_id=user_id,
-            metadata={
-                'motivation': serializer.validated_data.get('motivation', ''),
-                'document_ids': serializer.validated_data.get('document_ids', [])
-            }
+            motivation_letter=serializer.validated_data.get('motivation_letter'),
+            documents=serializer.validated_data.get('documents'),
+            status='pending'
         )
         
-        # Return created application
-        response_serializer = ApplicationSerializer(application)
-        return Response(response_serializer.data, status=status.HTTP_201_CREATED)
+        # Publish application.submitted event
+        publisher = get_event_publisher()
+        publisher.publish_application_submitted({
+            'application_id': str(application.id),
+            'student_id': str(application.student_id),
+            'offer_id': str(offer.id),
+            'offer_title': offer.title,
+            'status': application.status,
+            'submitted_at': application.submitted_at.isoformat()
+        })
+        
+        return Response(
+            ApplicationSerializer(application).data,
+            status=status.HTTP_201_CREATED
+        )
     
     def update(self, request, *args, **kwargs):
         """Update application (student only can update their own)."""
@@ -143,6 +160,17 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         
         instance.save()
         
+        # Publish application.updated event
+        publisher = get_event_publisher()
+        publisher.publish_application_updated({
+            'application_id': str(instance.id),
+            'student_id': str(instance.student_id),
+            'offer_id': str(instance.offer.id),
+            'offer_title': instance.offer.title,
+            'status': instance.status,
+            'updated_at': timezone.now().isoformat()
+        })
+        
         response_serializer = ApplicationSerializer(instance)
         return Response(response_serializer.data)
     
@@ -164,6 +192,16 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 {'error': 'Cannot cancel an accepted application'},
                 status=status.HTTP_400_BAD_REQUEST
             )
+        
+        # Publish application.withdrawn event before status change
+        publisher = get_event_publisher()
+        publisher.publish_application_withdrawn({
+            'application_id': str(application.id),
+            'student_id': str(application.student_id),
+            'offer_id': str(application.offer.id),
+            'offer_title': application.offer.title,
+            'withdrawn_at': timezone.now().isoformat()
+        })
         
         # Set status to cancelled instead of deleting
         application.status = Application.STATUS_CANCELLED
@@ -210,12 +248,11 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         
         application.save()
         
-        # Publish event to RabbitMQ
-        from utils.rabbitmq_publisher import publish_event
+        # Publish event based on status
+        publisher = get_event_publisher()
         
         if application.status == Application.STATUS_ACCEPTED:
-            # Publish application.accepted event
-            publish_event('application.accepted', {
+            publisher.publish_application_accepted({
                 'application_id': str(application.id),
                 'student_id': str(application.student_id),
                 'offer_id': str(application.offer.id),
@@ -224,8 +261,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 'decision_at': application.decision_at.isoformat() if application.decision_at else None
             })
         elif application.status == Application.STATUS_REJECTED:
-            # Publish application.rejected event
-            publish_event('application.rejected', {
+            publisher.publish_application_rejected({
                 'application_id': str(application.id),
                 'student_id': str(application.student_id),
                 'offer_id': str(application.offer.id),

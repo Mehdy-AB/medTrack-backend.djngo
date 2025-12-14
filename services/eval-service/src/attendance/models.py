@@ -18,7 +18,7 @@ class AttendanceRecord(models.Model):
     marked_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
-        db_table = 'eval"."attendance_records'
+        db_table = 'attendance_records'
         ordering = ['-date']
         unique_together = [['student_id', 'offer_id', 'date']]
         indexes = [
@@ -52,7 +52,7 @@ class AttendanceSummary(models.Model):
     validated_at = models.DateTimeField(null=True, blank=True)
     
     class Meta:
-        db_table = 'eval"."attendance_summary'
+        db_table = 'attendance_summaries'
         unique_together = [['student_id', 'offer_id']]
         indexes = [
             models.Index(fields=['student_id', 'offer_id']),

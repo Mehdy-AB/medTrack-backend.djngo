@@ -15,6 +15,7 @@ from .serializers import (
     CreateEvaluationSectionRequest,
     PaginatedEvaluations
 )
+from utils.event_publisher import get_attendance_publisher
 
 
 def get_user_id_from_request(request):
@@ -103,6 +104,17 @@ class EvaluationViewSet(viewsets.ModelViewSet):
                 comments=section_data.get('comments'),
             )
         
+        # Publish evaluation.created event
+        publisher = get_attendance_publisher()
+        publisher.publish_evaluation_created({
+            'evaluation_id': str(evaluation.id),
+            'student_id': str(evaluation.student_id),
+            'offer_id': str(evaluation.offer_id),
+            'evaluator_id': str(evaluation.evaluator_id) if evaluation.evaluator_id else None,
+            'grade': float(evaluation.grade) if evaluation.grade else None,
+            'section_count': len(sections_data)
+        })
+        
         response_serializer = EvaluationSerializer(evaluation)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
     
@@ -147,12 +159,38 @@ class EvaluationViewSet(viewsets.ModelViewSet):
                         comments=section_data.get('comments'),
                     )
         
+        # Publish event - if grade is set, it's a submission
+        publisher = get_attendance_publisher()
+        if evaluation.grade is not None and evaluation.grade > 0:
+            publisher.publish_evaluation_submitted({
+                'evaluation_id': str(evaluation.id),
+                'student_id': str(evaluation.student_id),
+                'offer_id': str(evaluation.offer_id),
+                'grade': float(evaluation.grade),
+                'submitted_at': timezone.now().isoformat()
+            })
+        else:
+            publisher.publish_evaluation_updated({
+                'evaluation_id': str(evaluation.id),
+                'student_id': str(evaluation.student_id),
+                'grade': float(evaluation.grade) if evaluation.grade else None
+            })
+        
         response_serializer = EvaluationSerializer(evaluation)
         return Response(response_serializer.data)
     
     def destroy(self, request, pk=None):
         """Delete evaluation and its sections."""
         evaluation = self.get_object()
+        
+        # Store data before deletion
+        evaluation_id = str(evaluation.id)
+        student_id = str(evaluation.student_id)
+        
+        # Publish delete event
+        publisher = get_attendance_publisher()
+        publisher.publish_evaluation_deleted(evaluation_id, student_id)
+        
         evaluation.delete()
         return Response({'success': True, 'message': 'Evaluation deleted successfully'})
     
@@ -173,6 +211,17 @@ class EvaluationViewSet(viewsets.ModelViewSet):
             evaluation.validated_at = None
         
         evaluation.save()
+        
+        # Publish validation event
+        publisher = get_attendance_publisher()
+        publisher.publish_evaluation_validated({
+            'evaluation_id': str(evaluation.id),
+            'student_id': str(evaluation.student_id),
+            'offer_id': str(evaluation.offer_id),
+            'validated': evaluation.validated,
+            'grade': float(evaluation.grade) if evaluation.grade else None,
+            'validated_at': evaluation.validated_at.isoformat() if evaluation.validated_at else None
+        })
         
         response_serializer = EvaluationSerializer(evaluation)
         return Response(response_serializer.data)

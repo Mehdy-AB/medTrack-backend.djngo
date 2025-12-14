@@ -13,6 +13,7 @@ from .serializers import (
     OfferSerializer, OfferListSerializer, CreateOfferRequest,
     UpdateOfferRequest, OfferWithDetails
 )
+from utils.event_publisher import get_event_publisher
 
 
 def get_user_id_from_request(request):
@@ -102,10 +103,45 @@ class OfferViewSet(viewsets.ModelViewSet):
             return UpdateOfferRequest
         return OfferSerializer
     
-    def perform_create(self, serializer):
-        """Set created_by from JWT token."""
-        user_id = get_user_id_from_request(self.request)
-        serializer.save(created_by=user_id)
+    def create(self, request):
+        """Create a new internship offer."""
+        serializer = CreateOfferRequest(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        user_id = get_user_id_from_request(request)
+        
+        offer = Offer.objects.create(
+            title=serializer.validated_data['title'],
+            description=serializer.validated_data['description'],
+            service_id=serializer.validated_data['service_id'],
+            establishment_id=serializer.validated_data.get('establishment_id'),
+            period_start=serializer.validated_data.get('period_start'),
+            period_end=serializer.validated_data.get('period_end'),
+            created_by=user_id,
+            status='draft'
+        )
+        
+        # Publish offer.created event
+        publisher = get_event_publisher()
+        publisher.publish_offer_created({
+            'offer_id': str(offer.id),
+            'title': offer.title,
+            'service_id': str(offer.service_id),
+            'establishment_id': str(offer.establishment_id) if offer.establishment_id else None,
+            'created_by': str(user_id) if user_id else None,
+            'status': offer.status
+        })
+        
+        return Response(
+            OfferSerializer(offer).data,
+            status=status.HTTP_201_CREATED
+        )
+    
+    # The perform_create method is no longer needed as the custom create method handles it.
+    # def perform_create(self, serializer):
+    #     """Set created_by from JWT token."""
+    #     user_id = get_user_id_from_request(self.request)
+    #     serializer.save(created_by=user_id)
     
     @action(detail=True, methods=['patch'], url_path='status')
     def update_status(self, request, pk=None):
@@ -125,8 +161,25 @@ class OfferViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
+        old_status = offer.status
         offer.status = new_status
         offer.save()
+        
+        # Publish appropriate event based on new status
+        publisher = get_event_publisher()
+        event_data = {
+            'offer_id': str(offer.id),
+            'title': offer.title,
+            'status': new_status,
+            'old_status': old_status
+        }
+        
+        if new_status == 'published':
+            publisher.publish_offer_published(event_data)
+        elif new_status == 'closed':
+            publisher.publish_offer_closed(event_data)
+        else:
+            publisher.publish_offer_updated(event_data)
         
         serializer = OfferSerializer(offer)
         return Response(serializer.data)

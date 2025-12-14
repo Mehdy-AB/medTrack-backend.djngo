@@ -13,6 +13,7 @@ from .serializers import (
 )
 from applications.models import Application
 from offers.models import Offer
+from utils.event_publisher import get_event_publisher
 
 
 def get_user_id_from_request(request):
@@ -116,22 +117,36 @@ class AffectationViewSet(viewsets.ModelViewSet):
             metadata=serializer.validated_data.get('metadata')
         )
         
+        # Publish affectation.created event
+        publisher = get_event_publisher()
+        publisher.publish_affectation_created({
+            'affectation_id': str(affectation.id),
+            'student_id': str(affectation.student_id),
+            'offer_id': str(offer.id),
+            'offer_title': offer.title,
+            'application_id': str(application.id),
+            'assigned_at': affectation.assigned_at.isoformat()
+        })
+        
         # Return with detailed serializer
         response_serializer = AffectationWithDetails(affectation)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
     
-    def destroy(self, request, *args, **kwargs):
-        """Delete affectation."""
+    def destroy(self, request, pk=None):
+        """Remove an affectation."""
         affectation = self.get_object()
-        affectation.delete()
         
-        return Response(
-            {
-                'success': True,
-                'message': 'Affectation deleted successfully'
-            },
-            status=status.HTTP_200_OK
-        )
+        # Store data before deletion
+        affectation_id = str(affectation.id)
+        student_id = str(affectation.student_id)
+        offer_id = str(affectation.offer.id)
+        
+        # Publish affectation.deleted event before deletion
+        publisher = get_event_publisher()
+        publisher.publish_affectation_deleted(affectation_id, student_id, offer_id)
+        
+        affectation.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
     
     @action(detail=False, methods=['get'], url_path='by-student/(?P<student_id>[^/.]+)')
     def by_student(self, request, student_id=None):

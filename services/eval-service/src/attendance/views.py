@@ -2,8 +2,9 @@
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Sum, Q, Count
 from .models import AttendanceRecord, AttendanceSummary
 from .serializers import (
     AttendanceRecordSerializer,
@@ -14,6 +15,7 @@ from .serializers import (
     AttendanceSummarySerializer,
     AttendanceSummaryWithDetailsSerializer
 )
+from utils.event_publisher import get_attendance_publisher
 
 
 def get_user_id_from_request(request):
@@ -110,6 +112,27 @@ class AttendanceViewSet(viewsets.ModelViewSet):
             serializer.validated_data['offer_id']
         )
         
+        # Publish attendance.marked event
+        publisher = get_attendance_publisher()
+        event_data = {
+            'attendance_id': str(attendance.id),
+            'student_id': str(attendance.student_id),
+            'offer_id': str(attendance.offer_id),
+            'date': str(attendance.date),
+            'is_present': attendance.is_present,
+            'justified': attendance.justified,
+            'marked_by': str(user_id) if user_id else None
+        }
+        
+        # If justified, publish separate event
+        if attendance.justified and attendance.justification_reason:
+            publisher.publish_attendance_justified({
+                **event_data,
+                'justification_reason': attendance.justification_reason
+            })
+        else:
+            publisher.publish_attendance_marked(event_data)
+        
         response_serializer = AttendanceRecordSerializer(attendance)
         return Response(
             response_serializer.data,
@@ -175,6 +198,15 @@ class AttendanceViewSet(viewsets.ModelViewSet):
             # Update summary for each student
             self._update_attendance_summary(record_data['student_id'], offer_id)
         
+        # Publish bulk attendance event
+        publisher = get_attendance_publisher()
+        publisher.publish_attendance_bulk_marked({
+            'offer_id': str(offer_id),
+            'date': str(date),
+            'count': len(created_records),
+            'marked_by': str(user_id) if user_id else None
+        })
+        
         response_serializer = AttendanceRecordSerializer(created_records, many=True)
         return Response(response_serializer.data)
     
@@ -202,6 +234,17 @@ class AttendanceViewSet(viewsets.ModelViewSet):
                 'presence_rate': round(presence_rate, 2),
             }
         )
+        
+        # Publish summary updated event
+        publisher = get_attendance_publisher()
+        publisher.publish_attendance_summary_updated({
+            'summary_id': str(summary.id),
+            'student_id': str(student_id),
+            'offer_id': str(offer_id),
+            'total_days': total_days,
+            'present_days': present_days,
+            'presence_rate': round(presence_rate, 2)
+        })
         
         return summary
 
@@ -255,6 +298,17 @@ class AttendanceSummaryViewSet(viewsets.ReadOnlyModelViewSet):
             summary.validated_at = None
         
         summary.save()
+        
+        # Publish validation event
+        publisher = get_attendance_publisher()
+        publisher.publish_attendance_validated({
+            'summary_id': str(summary.id),
+            'student_id': str(summary.student_id),
+            'offer_id': str(summary.offer_id),
+            'validated': summary.validated,
+            'presence_rate': float(summary.presence_rate),
+            'validated_at': summary.validated_at.isoformat() if summary.validated_at else None
+        })
         
         serializer = AttendanceSummarySerializer(summary)
         return Response(serializer.data)
