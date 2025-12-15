@@ -91,7 +91,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         # Verify offer exists and is active
         try:
             offer = Offer.objects.get(id=serializer.validated_data['offer_id'])
-            if not offer.is_active:
+            if offer.status != Offer.STATUS_PUBLISHED:
                 return Response(
                     {'error': 'This offer is not currently accepting applications'},
                     status=status.HTTP_400_BAD_REQUEST
@@ -106,9 +106,11 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         application = Application.objects.create(
             student_id=user_id or serializer.validated_data.get('student_id'),
             offer=offer,
-            motivation_letter=serializer.validated_data.get('motivation_letter'),
-            documents=serializer.validated_data.get('documents'),
-            status='pending'
+            status=Application.STATUS_SUBMITTED,
+            metadata={
+                'motivation': serializer.validated_data.get('motivation'),
+                'document_ids': serializer.validated_data.get('document_ids', [])
+            }
         )
         
         # Publish application.submitted event

@@ -45,11 +45,7 @@ class ProfileServiceConsumer:
             queue=self.queue_name,
             routing_key='core.offer.*'  # All offer events
         )
-        channel.queue_bind(
-            exchange=self.exchange_name,
-            queue=self.queue_name,
-            routing_key='user.created'
-        )
+
         
         print(f"✅ Connected! Listening for events on queue: {self.queue_name}")
         return connection, channel
@@ -94,16 +90,7 @@ class ProfileServiceConsumer:
         """Remove offer from index."""
         self.index_offer(data, action='delete')
     
-    def handle_user_created(self, data):
-        """Create profile for new user."""
-        user_id = data.get('user_id')
-        role = data.get('role')
-        email = data.get('email')
-        
-        print(f"👤 Creating profile for new user: {email} ({role})")
-        # In real implementation:
-        # - Connect to profile_db
-        # - Create Student or Encadrant record
+
 
     def process_message(self, ch, method, properties, body):
         """Process incoming RabbitMQ message."""
@@ -127,7 +114,7 @@ class ProfileServiceConsumer:
                 'core.offer.updated': self.handle_offer_updated,
                 'core.offer.closed': self.handle_offer_closed,
                 'core.offer.deleted': self.handle_offer_deleted,
-                'user.created': self.handle_user_created,
+
             }
             
             handler = handlers.get(event_type)

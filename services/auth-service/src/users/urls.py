@@ -7,7 +7,7 @@ from . import views
 urlpatterns = [
     # Public endpoints
     path('login', views.login, name='login'),
-    path('register', views.register, name='register'),
+
     path('refresh', views.refresh_token, name='refresh'),
     
     # Current user endpoints

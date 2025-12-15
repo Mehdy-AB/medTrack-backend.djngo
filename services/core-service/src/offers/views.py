@@ -131,7 +131,7 @@ class OfferViewSet(viewsets.ModelViewSet):
             period_start=serializer.validated_data.get('period_start'),
             period_end=serializer.validated_data.get('period_end'),
             created_by=user_id,
-            status='draft'
+            status=serializer.validated_data.get('status', 'draft')
         )
         
         # Publish offer.created event

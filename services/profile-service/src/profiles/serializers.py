@@ -52,13 +52,16 @@ class StudentSerializer(serializers.ModelSerializer):
 class StudentCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating students (without user_data)"""
 
+    password = serializers.CharField(write_only=True, required=False, min_length=6)
+
     class Meta:
         model = Student
         fields = [
-            'user_id', 'cin', 'email', 'phone', 'first_name', 'last_name',
+            'id', 'user_id', 'cin', 'email', 'phone', 'first_name', 'last_name',
             'student_number', 'date_of_birth', 'university', 'program', 
-            'year_level', 'metadata'
+            'year_level', 'metadata', 'password'
         ]
+        read_only_fields = ['id', 'user_id']
 
 
 class EncadrantSerializer(serializers.ModelSerializer):
@@ -85,9 +88,12 @@ class EncadrantSerializer(serializers.ModelSerializer):
 class EncadrantCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating encadrants (without user_data)"""
 
+    password = serializers.CharField(write_only=True, required=False, min_length=6)
+
     class Meta:
         model = Encadrant
         fields = [
-            'user_id', 'cin', 'email', 'phone', 'first_name', 'last_name',
-            'establishment', 'service', 'position', 'speciality', 'metadata'
+            'id', 'user_id', 'cin', 'email', 'phone', 'first_name', 'last_name',
+            'establishment', 'service', 'position', 'speciality', 'metadata', 'password'
         ]
+        read_only_fields = ['id', 'user_id']

@@ -21,6 +21,8 @@ from typing import Optional, Dict, Any
 
 # Configuration
 BASE_URL = "http://localhost"
+AUTH_URL = f"{BASE_URL}/auth/api/v1"
+PROFILE_URL = f"{BASE_URL}/profile"
 
 # Test data storage
 test_data = {
@@ -111,91 +113,125 @@ def test_health_checks():
     ]
 
     for endpoint, name in services:
-        result = api_call("GET", endpoint)
+        result = api_call("GET", endpoint, token=test_data["admin_token"])
         log_test(f"{name} Health", result is not None)
 
 
-def test_register_admin():
-    """Register an admin user."""
-    print("\n" + "="*60)
-    print("AUTH SERVICE - REGISTRATION")
-    print("="*60)
 
-    # Register admin
-    admin_data = {
-        "email": f"admin_{uuid.uuid4().hex[:8]}@medtrack.test",
-        "password": "Admin123!",
-        "first_name": "Admin",
-        "last_name": "User",
-        "role": "admin"
+# ============================================
+# AUTH SERVICE - BOOTSTRAP ADMIN
+# ============================================
+
+def create_initial_admin():
+    """Create initial admin user via Docker exec."""
+    print("Bootstrap Admin User...")
+    
+    email = "admin@medtrack.com"
+    password = "password123"
+    
+    # Check if admin already exists via API
+    login_data = {
+        "email": email,
+        "password": password
     }
+    try:
+        response = requests.post(f"{AUTH_URL}/login", json=login_data)
+        if response.status_code == 200:
+            print(f"✅ Admin already exists.")
+            test_data['admin_email'] = email
+            test_data['admin_password'] = password
+            test_data['admin_token'] = response.json()['access_token']
+            test_data['admin_user'] = response.json()['user']
+            return
+    except:
+        pass
 
-    result = api_call("POST", "/auth/api/v1/register", data=admin_data, expected_status=201)
-    if result and "access_token" in result:
-        test_data["admin_token"] = result["access_token"]
-        test_data["admin_user"] = result.get("user", {})
-        log_test("Register Admin User", True)
-    else:
-        log_test("Register Admin User", False, "No access token in response")
+    # Create via Docker
+    print(f"Creating admin user via Docker exec...")
+    cmd = [
+        "docker", "exec", "auth-service", "python", "manage.py", "shell", "-c",
+        f"from users.models import User; u, _ = User.objects.get_or_create(email='{email}', defaults={{'role': 'admin', 'is_active': True, 'first_name': 'Admin'}}); u.set_password('{password}'); u.role='admin'; u.save()"
+    ]
+    
+    try:
+        import subprocess
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        if result.returncode != 0:
+            print(f"❌ Failed to create admin: {result.stderr}")
+            return
+        
+        print(f"✅ Admin user created/verified via Docker.")
+        test_data['admin_email'] = email
+        test_data['admin_password'] = password
+        
+    except Exception as e:
+        print(f"❌ Error bootstrapping admin: {e}")
+
+def test_bootstrap_admin():
+    create_initial_admin()
 
 
-def test_register_student():
-    """Register a student user."""
-    student_data = {
-        "email": f"student_{uuid.uuid4().hex[:8]}@medtrack.test",
-        "password": "Student123!",
-        "first_name": "Student",
-        "last_name": "User",
-        "role": "student"
+
+
+# ============================================
+# AUTH SERVICE - LOGIN (Existing Users)
+# ============================================
+
+def test_admin_login():
+    """Test admin login."""
+    pass # Header
+
+    data = {
+        "email": test_data.get('admin_email', 'admin@medtrack.com'),
+        "password": test_data.get('admin_password', 'password123')
     }
-
-    result = api_call("POST", "/auth/api/v1/register", data=student_data, expected_status=201)
-    if result and "access_token" in result:
-        test_data["student_token"] = result["access_token"]
-        test_data["student_user"] = result.get("user", {})
-        log_test("Register Student User", True)
+    response = requests.post(f"{AUTH_URL}/login", json=data)
+    
+    if response.status_code == 200:
+        print(f"✅ PASS | Admin Login Successful")
+        test_data['admin_token'] = response.json()['access_token']
+        test_data['admin_user'] = response.json()['user']
     else:
-        log_test("Register Student User", False, "No access token in response")
+        print(f"❌ FAIL | Status: {response.status_code}, Response: {response.text}")
 
 
-def test_register_encadrant():
-    """Register an encadrant user."""
-    encadrant_data = {
-        "email": f"encadrant_{uuid.uuid4().hex[:8]}@medtrack.test",
-        "password": "Encadrant123!",
-        "first_name": "Encadrant",
-        "last_name": "User",
-        "role": "encadrant"
+def test_student_login():
+    """Test student login (verify Auth creation)."""
+    if 'student_email' not in test_data:
+        print("⚠️ Skipping Student Login (No student created)")
+        return
+
+    data = {
+        "email": test_data['student_email'],
+        "password": test_data['student_password']
     }
-
-    result = api_call("POST", "/auth/api/v1/register", data=encadrant_data, expected_status=201)
-    if result and "access_token" in result:
-        test_data["encadrant_token"] = result["access_token"]
-        test_data["encadrant_user"] = result.get("user", {})
-        log_test("Register Encadrant User", True)
+    response = requests.post(f"{AUTH_URL}/login", json=data)
+    
+    if response.status_code == 200:
+        print(f"✅ PASS | Student Login Successful")
+        test_data['student_token'] = response.json()['access_token']
     else:
-        log_test("Register Encadrant User", False, "No access token in response")
+        print(f"❌ FAIL | Status: {response.status_code}, Response: {response.text}")
 
 
-def test_login():
-    """Test login functionality."""
-    print("\n" + "="*60)
-    print("AUTH SERVICE - LOGIN")
-    print("="*60)
+def test_encadrant_login():
+    """Test encadrant login (verify Auth creation)."""
+    if 'encadrant_email' not in test_data:
+        print("⚠️ Skipping Encadrant Login (No encadrant created)")
+        return
 
-    if test_data["admin_user"]:
-        login_data = {
-            "email": test_data["admin_user"].get("email"),
-            "password": "Admin123!"
-        }
-        result = api_call("POST", "/auth/api/v1/login", data=login_data)
-        if result and "access_token" in result:
-            test_data["admin_token"] = result["access_token"]  # Refresh token
-            log_test("Admin Login", True)
-        else:
-            log_test("Admin Login", False)
+    data = {
+        "email": test_data['encadrant_email'],
+        "password": test_data['encadrant_password']
+    }
+    response = requests.post(f"{AUTH_URL}/login", json=data)
+    
+    if response.status_code == 200:
+        print(f"✅ PASS | Encadrant Login Successful")
+        test_data['encadrant_token'] = response.json()['access_token']
     else:
-        log_test("Admin Login", False, "No admin user registered")
+        print(f"❌ FAIL | Status: {response.status_code}, Response: {response.text}")
+
 
 
 def test_get_current_user():
@@ -314,36 +350,87 @@ def test_create_student_profile():
         log_test("Create Student Profile", False, "Missing student user or admin token")
 
 
+def test_create_student_profile():
+    """Create a student profile (Sync Auth)."""
+    print("\n" + "="*60)
+    print("PROFILE SERVICE - STUDENT PROFILE")
+    print("="*60)
+
+    # Needs Admin Token
+    if 'admin_token' not in test_data:
+         test_admin_login()
+    
+    headers = {"Authorization": f"Bearer {test_data.get('admin_token')}"}
+    
+    email = f"student_{uuid.uuid4().hex[:6]}@medtrack.com"
+    password = "password123"
+    
+    data = {
+        "email": email,
+        "password": password,
+        "first_name": "Student",
+        "last_name": "Test",
+        "cin": f"C{uuid.uuid4().hex[:6].upper()}",
+        "phone": "0600000000",
+        "student_number": f"ST{uuid.uuid4().hex[:6].upper()}",
+        "date_of_birth": "2000-01-01",
+        "university": "Med School",
+        "program": "Medicine",
+        "year_level": 3
+    }
+    
+    response = requests.post(f"{PROFILE_URL}/api/students/", json=data, headers=headers)
+    
+    if response.status_code == 201:
+        profile = response.json()
+        print(f"✅ PASS | Student Profile Created: {profile['id']} (User ID: {profile['user_id']})")
+        test_data["student_profile_id"] = profile['id']
+        test_data["student_user"] = {'id': profile['user_id']} # Store basic user info
+        test_data["student_email"] = email
+        test_data["student_password"] = password
+        log_test("Create Student Profile", True)
+    else:
+        print(f"❌ FAIL | Status: {response.status_code}, Response: {response.text}")
+        log_test("Create Student Profile", False)
+
+
 def test_create_encadrant_profile():
-    """Create an encadrant profile."""
+    """Create an encadrant profile (Sync Auth)."""
     print("\n" + "="*60)
     print("PROFILE SERVICE - ENCADRANT PROFILE")
     print("="*60)
 
-    if test_data["encadrant_user"] and test_data["admin_token"] and test_data["service_id"]:
-        encadrant_profile_data = {
-            "user_id": test_data["encadrant_user"].get("id"),
-            "email": test_data["encadrant_user"].get("email"),
-            "first_name": "Test",
-            "last_name": "Encadrant",
-            "cin": f"CD{uuid.uuid4().hex[:6].upper()}",
-            "phone": "+212 6 00 00 00 02",
-            "specialty": "Cardiology",
-            "service": test_data["service_id"]
-        }
-        result = api_call(
-            "POST", "/profile/api/encadrants/",
-            token=test_data["admin_token"],
-            data=encadrant_profile_data,
-            expected_status=201
-        )
-        if result and "id" in result:
-            test_data["encadrant_profile_id"] = result["id"]
-            log_test("Create Encadrant Profile", True)
-        else:
-            log_test("Create Encadrant Profile", False)
+    headers = {"Authorization": f"Bearer {test_data.get('admin_token')}"}
+    
+    email = f"encadrant_{uuid.uuid4().hex[:6]}@medtrack.com"
+    password = "password123"
+    
+    data = {
+        "email": email,
+        "password": password,
+        "first_name": "Dr.",
+        "last_name": "Encadrant",
+        "cin": f"CD{uuid.uuid4().hex[:6].upper()}",
+        "phone": "+212 6 00 00 00 02",
+        "speciality": "Cardiology",
+        "position": "Professor",
+        "establishment": test_data.get('establishment_id'),
+        "service": test_data.get('service_id')
+    }
+    
+    response = requests.post(f"{PROFILE_URL}/api/encadrants/", json=data, headers=headers)
+    
+    if response.status_code == 201:
+        profile = response.json()
+        print(f"✅ PASS | Encadrant Profile Created: {profile['id']}")
+        test_data["encadrant_profile_id"] = profile['id']
+        test_data["encadrant_user"] = {'id': profile['user_id']}
+        test_data["encadrant_email"] = email
+        test_data["encadrant_password"] = password
+        log_test("Create Encadrant Profile", True)
     else:
-        log_test("Create Encadrant Profile", False, "Missing encadrant user, service, or admin token")
+        print(f"❌ FAIL | Status: {response.status_code}, Response: {response.text}")
+        log_test("Create Encadrant Profile", False)
 
 
 def test_list_students():
@@ -402,17 +489,57 @@ def test_create_offer():
 
 def test_list_offers():
     """List all offers."""
-    result = api_call("GET", "/core/offers/")
-    log_test("List Offers (Public)", result is not None)
+    if test_data["admin_token"]:
+        result = api_call("GET", "/core/offers/", token=test_data["admin_token"])
+        log_test("List Offers", result is not None)
+    else:
+        log_test("List Offers", False, "No token")
 
 
 def test_get_offer_detail():
     """Get offer detail."""
-    if test_data["offer_id"]:
-        result = api_call("GET", f"/core/offers/{test_data['offer_id']}/")
+    if test_data["offer_id"] and test_data["student_token"]:
+        result = api_call("GET", f"/core/offers/{test_data['offer_id']}/", token=test_data["student_token"])
         log_test("Get Offer Detail", result is not None and "id" in result)
     else:
-        log_test("Get Offer Detail", False, "No offer created")
+        log_test("Get Offer Detail", False, "No offer created or token")
+
+
+# ============================================
+# CORE SERVICE - APPLICATIONS
+# ============================================
+def test_apply_offer():
+    """Student applies to an offer."""
+    if test_data["offer_id"] and test_data["student_token"]:
+        data = {
+            "offer_id": test_data["offer_id"],
+            "motivation": "I am very interested in this internship."
+        }
+        result = api_call("POST", "/core/applications/", data=data, token=test_data["student_token"], expected_status=201)
+        if result and "id" in result:
+            test_data["application_id"] = result["id"]
+            log_test("Apply to Offer", True)
+        else:
+            log_test("Apply to Offer", False, "Failed to create application")
+    else:
+        log_test("Apply to Offer", False, "Missing offer_id or student_token")
+
+def test_list_applications():
+    """List applications (Admin)."""
+    if test_data["admin_token"]:
+        result = api_call("GET", "/core/applications/", token=test_data["admin_token"])
+        log_test("List Applications", result is not None and "results" in result)
+    else:
+        log_test("List Applications", False, "Missing admin_token")
+
+def test_accept_application():
+    """Accept an application (Admin)."""
+    if test_data.get("application_id") and test_data["admin_token"]:
+        data = {"status": "accepted"}
+        result = api_call("PATCH", f"/core/applications/{test_data['application_id']}/status/", data=data, token=test_data["admin_token"])
+        log_test("Accept Application", result is not None and result.get("status") == "accepted")
+    else:
+        log_test("Accept Application", False, "Missing application_id or admin_token")
 
 
 # ============================================
@@ -425,17 +552,18 @@ def test_send_message():
     print("COMM SERVICE - MESSAGES")
     print("="*60)
 
-    if test_data["admin_token"] and test_data["student_user"]:
+    if test_data["admin_token"] and test_data["student_user"] and test_data["admin_user"]:
         message_data = {
-            "recipient_id": test_data["student_user"].get("id"),
+            "sender_id": test_data["admin_user"].get("id"),
+            "receiver_id": test_data["student_user"].get("id"),
             "subject": "Welcome to MedTrack",
             "content": "Welcome! Your registration has been approved."
         }
         result = api_call(
-            "POST", "/comm/messages/",
+            "POST", "/comm/api/messages/",
             token=test_data["admin_token"],
             data=message_data,
-            expected_status=201
+            expected_status=200
         )
         if result and "id" in result:
             test_data["message_id"] = result["id"]
@@ -449,7 +577,7 @@ def test_send_message():
 def test_list_messages():
     """List received messages."""
     if test_data["student_token"]:
-        result = api_call("GET", "/comm/messages/", token=test_data["student_token"])
+        result = api_call("GET", "/comm/api/messages/", token=test_data["student_token"])
         log_test("List Messages", result is not None)
     else:
         log_test("List Messages", False, "No student token")
@@ -465,14 +593,14 @@ def test_create_notification():
         notification_data = {
             "user_id": test_data["student_user"].get("id"),
             "title": "New Internship Available",
-            "message": "A new cardiology internship matching your profile is now available.",
-            "type": "info"
+            "content": "A new cardiology internship matching your profile is now available.",
+            "type": "system"
         }
         result = api_call(
-            "POST", "/comm/notifications/",
+            "POST", "/comm/api/notifications/",
             token=test_data["admin_token"],
             data=notification_data,
-            expected_status=201
+            expected_status=200
         )
         if result and "id" in result:
             test_data["notification_id"] = result["id"]
@@ -486,7 +614,7 @@ def test_create_notification():
 def test_list_notifications():
     """List user notifications."""
     if test_data["student_token"]:
-        result = api_call("GET", "/comm/notifications/", token=test_data["student_token"])
+        result = api_call("GET", "/comm/api/notifications/", token=test_data["student_token"])
         log_test("List Notifications", result is not None)
     else:
         log_test("List Notifications", False, "No student token")
@@ -505,21 +633,29 @@ def run_all_tests():
     print("="*60)
 
     # Health checks
-    test_health_checks()
 
-    # Auth tests
-    test_register_admin()
-    test_register_student()
-    test_register_encadrant()
-    test_login()
+
+    # Auth tests (Bootstrap)
+    test_bootstrap_admin()
+    test_admin_login()
+    
     test_get_current_user()
     test_list_users()
+
+    # Health checks (authenticated)
+    test_health_checks()
 
     # Profile tests
     test_create_establishment()
     test_create_service()
+    
+    # Sync Creation & Login Verification
     test_create_student_profile()
+    test_student_login()
+    
     test_create_encadrant_profile()
+    test_encadrant_login()
+    
     test_list_students()
     test_list_encadrants()
 
@@ -527,6 +663,11 @@ def run_all_tests():
     test_create_offer()
     test_list_offers()
     test_get_offer_detail()
+
+    # Application tests
+    test_apply_offer()
+    test_list_applications()
+    test_accept_application()
 
     # Comm tests
     test_send_message()

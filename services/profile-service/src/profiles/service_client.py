@@ -33,8 +33,10 @@ class ConsulServiceDiscovery:
         try:
             _, services = self.client.health.service(service_name, passing=True)
             if services:
-                service = services[0]['Service']
-                url = f"http://{a['Address']}:{service['Port']}"
+                entry = services[0]
+                address = entry['Service'].get('Address') or entry['Node']['Address']
+                port = entry['Service']['Port']
+                url = f"http://{address}:{port}"
                 logger.debug(f"✅ Discovered {service_name} at {url} via Consul")
                 return url
             else:
@@ -113,13 +115,47 @@ class AuthServiceClient:
         REAL API CALL: GET {AUTH_SERVICE_URL}/auth/api/v1/users/{user_id}
         """
         try:
+            auth_url = _consul.get_service_url('auth-service', 'http://auth-service:8000')
             response = requests.get(
-                f"{AUTH_SERVICE_URL}/auth/api/v1/users/{user_id}",
+                f"{auth_url}/auth/api/v1/users/{user_id}",
                 timeout=5
             )
             return response.status_code == 200
         except requests.exceptions.RequestException:
             return False
+
+    @staticmethod
+    def create_user(user_data: Dict[str, Any], token: str) -> Optional[Dict[str, Any]]:
+        """
+        Create a new user in AUTH-SERVICE
+        API ENDPOINT: POST /auth/api/v1/users
+        Requires Admin/Encadrant token
+        """
+        try:
+            auth_url = _consul.get_service_url('auth-service', 'http://auth-service:8000')
+            
+            headers = {
+                'Authorization': token if token.startswith('Bearer ') else f'Bearer {token}',
+                'Content-Type': 'application/json'
+            }
+            
+            response = requests.post(
+                f"{auth_url}/auth/api/v1/users",
+                json=user_data,
+                headers=headers,
+                timeout=10
+            )
+            
+            if response.status_code == 201:
+                logger.info(f"✅ Created user {user_data.get('email')} in AUTH-SERVICE")
+                return response.json()
+            else:
+                logger.warning(f"Failed to create user in AUTH-SERVICE. Status: {response.status_code}, Body: {response.text}")
+                return None
+                
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Failed to call AUTH-SERVICE create_user: {e}")
+            return None
 
 
 # Service URLs

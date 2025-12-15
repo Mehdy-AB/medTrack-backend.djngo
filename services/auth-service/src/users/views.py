@@ -109,44 +109,7 @@ def login(request):
     return Response(response_data, status=status.HTTP_200_OK)
 
 
-@api_view(['POST'])
-@permission_classes([AllowAny])
-def register(request):
-    """
-    POST /auth/api/v1/register
-    Register new user and return tokens.
-    """
-    serializer = UserCreateSerializer(data=request.data)
-    if not serializer.is_valid():
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-    
-    user = serializer.save()
-    
-    # Publish event
-    # Publish event
-    publish_event(
-        EventTypes.USER_CREATED,
-        {
-            'user_id': str(user.id),
-            'email': user.email,
-            'role': user.role,
-            'first_name': user.first_name,
-            'last_name': user.last_name,
-        },
-        'auth-service'
-    )
-    
-    # Generate tokens
-    response_data = get_tokens_response(user, request)
-    
-    AuditLog.log(
-        action='User registered',
-        user=user,
-        entity='User',
-        entity_id=user.id
-    )
-    
-    return Response(response_data, status=status.HTTP_201_CREATED)
+
 
 
 @api_view(['POST'])
@@ -310,14 +273,63 @@ class UserPagination(PageNumberPagination):
     max_page_size = 100
 
 
-@api_view(['GET'])
+@api_view(['GET', 'POST'])
 def list_users(request):
     """
-    GET /auth/api/v1/users
-    List all users with pagination and filtering.
+    GET /auth/api/v1/users - List all users (Admin only)
+    POST /auth/api/v1/users - Create new user (Admin/Encadrant only)
     """
     user_data = getattr(request, 'user_data', {})
-    if user_data.get('role') != 'admin':
+    current_role = user_data.get('role')
+
+    if request.method == 'POST':
+        # Admin or Encadrant (for students)
+        if current_role not in ['admin', 'encadrant']:
+             return Response(
+                {'error': 'Admin or Encadrant access required', 'code': 'FORBIDDEN'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = UserCreateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        # Helper: Ensure encadrant creates only students (if business rule implies)
+        # Assuming for now Encadrant can only set role='student'
+        new_role = serializer.validated_data.get('role', 'student') 
+        if current_role == 'encadrant' and new_role != 'student':
+             return Response(
+                {'error': 'Encadrants can only create Student users', 'code': 'FORBIDDEN_ROLE'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        user = serializer.save()
+        
+        # Publish event 
+        publish_event(
+            EventTypes.USER_CREATED,
+            {
+                'user_id': str(user.id),
+                'email': user.email,
+                'role': user.role,
+                'first_name': user.first_name,
+                'last_name': user.last_name,
+            },
+            'auth-service'
+        )
+        
+        AuditLog.log(
+            action='User created',
+            user=get_current_user(request),
+            entity='User',
+            entity_id=user.id,
+            details={'role': user.role}
+        )
+        
+        return Response(UserSerializer(user).data, status=status.HTTP_201_CREATED)
+
+    # GET
+    if current_role != 'admin':
         return Response(
             {'error': 'Admin access required', 'code': 'FORBIDDEN'},
             status=status.HTTP_403_FORBIDDEN

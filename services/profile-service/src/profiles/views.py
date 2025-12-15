@@ -48,7 +48,7 @@ class EstablishmentViewSet(viewsets.ModelViewSet):
     queryset = Establishment.objects.all()
     serializer_class = EstablishmentSerializer
 
-    @require_role('encadrant')
+    @require_role('admin', 'encadrant')
     def create(self, request, *args, **kwargs):
         """Create establishment and publish establishment.created event"""
         response = super().create(request, *args, **kwargs)
@@ -76,7 +76,7 @@ class EstablishmentViewSet(viewsets.ModelViewSet):
 
         return response
 
-    @require_role('encadrant')
+    @require_role('admin', 'encadrant')
     def update(self, request, *args, **kwargs):
         """Update establishment and publish establishment.updated event"""
         response = super().update(request, *args, **kwargs)
@@ -104,12 +104,12 @@ class EstablishmentViewSet(viewsets.ModelViewSet):
 
         return response
 
-    @require_role('encadrant')
+    @require_role('admin', 'encadrant')
     def partial_update(self, request, *args, **kwargs):
         """Partial update - delegates to update method"""
         return super().partial_update(request, *args, **kwargs)
 
-    @require_role('encadrant')
+    @require_role('admin', 'encadrant')
     def destroy(self, request, *args, **kwargs):
         """Delete establishment (encadrant only)"""
         return super().destroy(request, *args, **kwargs)
@@ -138,7 +138,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
     queryset = Service.objects.all()
     serializer_class = ServiceSerializer
 
-    @require_role('encadrant')
+    @require_role('admin', 'encadrant')
     def create(self, request, *args, **kwargs):
         """Create service and publish service.created event"""
         response = super().create(request, *args, **kwargs)
@@ -165,7 +165,7 @@ class ServiceViewSet(viewsets.ModelViewSet):
 
         return response
 
-    @require_role('encadrant')
+    @require_role('admin', 'encadrant')
     def update(self, request, *args, **kwargs):
         """Update service and publish service.updated event"""
         response = super().update(request, *args, **kwargs)
@@ -192,12 +192,12 @@ class ServiceViewSet(viewsets.ModelViewSet):
 
         return response
 
-    @require_role('encadrant')
+    @require_role('admin', 'encadrant')
     def partial_update(self, request, *args, **kwargs):
         """Partial update - delegates to update method"""
         return super().partial_update(request, *args, **kwargs)
 
-    @require_role('encadrant')
+    @require_role('admin', 'encadrant')
     def destroy(self, request, *args, **kwargs):
         """Delete service (encadrant only)"""
         return super().destroy(request, *args, **kwargs)
@@ -231,12 +231,56 @@ class StudentViewSet(viewsets.ModelViewSet):
             return StudentCreateSerializer
         return StudentSerializer
 
+    @require_role('admin', 'encadrant')
     def create(self, request, *args, **kwargs):
-        """Create student and publish student.created event"""
-        response = super().create(request, *args, **kwargs)
-
-        # Get created student
-        student = Student.objects.get(id=response.data['id'])
+        """Create student: Create Auth User -> Create Profile"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # Extract auth data
+        email = serializer.validated_data.get('email')
+        password = serializer.validated_data.pop('password', None)
+        first_name = serializer.validated_data.get('first_name')
+        last_name = serializer.validated_data.get('last_name')
+        
+        if not password:
+            return Response(
+                {'error': 'Password is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Create User in Auth Service
+        auth_header = request.META.get('HTTP_AUTHORIZATION')
+        token = auth_header.split()[1] if auth_header and 'Bearer' in auth_header else auth_header
+        
+        user_data = {
+            'email': email,
+            'password': password,
+            'first_name': first_name,
+            'last_name': last_name,
+            'role': 'student'
+        }
+        
+        created_user = AuthServiceClient.create_user(user_data, token)
+        
+        if not created_user:
+            return Response(
+                {'error': 'Failed to create user in Auth Service'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        user_id = created_user.get('id')
+        
+        # Create Profile
+        try:
+            student = serializer.save(user_id=user_id)
+        except Exception as e:
+            # TODO: Rollback auth user creation? (Manual compensation needed or assume eventual consistency/cleanup)
+            logger.error(f"Failed to create profile for user {user_id}: {e}")
+            return Response(
+                {'error': 'Failed to create profile'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
         # Publish event
         try:
@@ -247,7 +291,6 @@ class StudentViewSet(viewsets.ModelViewSet):
                     'user_id': str(student.user_id),
                     'cin': student.cin,
                     'email': student.email,
-                    'phone': student.phone,
                     'first_name': student.first_name,
                     'last_name': student.last_name,
                     'created_at': student.created_at.isoformat()
@@ -258,7 +301,7 @@ class StudentViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error(f"Failed to publish student.created event: {e}")
 
-        return response
+        return Response(StudentSerializer(student).data, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):
         """Update student and publish student.updated event"""
@@ -376,13 +419,56 @@ class EncadrantViewSet(viewsets.ModelViewSet):
             return EncadrantCreateSerializer
         return EncadrantSerializer
 
+    @require_role('admin')
     def create(self, request, *args, **kwargs):
-        """Create encadrant and publish encadrant.created event"""
-        response = super().create(request, *args, **kwargs)
+        """Create encadrant: Create Auth User -> Create Profile (Admin only)"""
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # Extract auth data
+        email = serializer.validated_data.get('email')
+        password = serializer.validated_data.pop('password', None)
+        first_name = serializer.validated_data.get('first_name')
+        last_name = serializer.validated_data.get('last_name')
+        
+        if not password:
+             return Response(
+                {'error': 'Password is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
-        # Get created encadrant
-        encadrant = Encadrant.objects.get(id=response.data['id'])
+        # Create User in Auth Service
+        auth_header = request.META.get('HTTP_AUTHORIZATION')
+        token = auth_header.split()[1] if auth_header and 'Bearer' in auth_header else auth_header
+        
+        user_data = {
+            'email': email,
+            'password': password,
+            'first_name': first_name,
+            'last_name': last_name,
+            'role': 'encadrant'
+        }
+        
+        created_user = AuthServiceClient.create_user(user_data, token)
+        
+        if not created_user:
+            return Response(
+                {'error': 'Failed to create user in Auth Service'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+        user_id = created_user.get('id')
 
+        # Create Profile
+        try:
+            encadrant = serializer.save(user_id=user_id)
+        except Exception as e:
+            logger.error(f"Failed to create encadrant profile for user {user_id}: {e}")
+            return Response(
+                {'error': 'Failed to create profile'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+            
         # Publish event
         try:
             publish_event(
@@ -392,12 +478,8 @@ class EncadrantViewSet(viewsets.ModelViewSet):
                     'user_id': str(encadrant.user_id),
                     'cin': encadrant.cin,
                     'email': encadrant.email,
-                    'phone': encadrant.phone,
                     'first_name': encadrant.first_name,
                     'last_name': encadrant.last_name,
-                    'establishment_id': str(encadrant.establishment_id) if encadrant.establishment_id else None,
-                    'service_id': str(encadrant.service_id) if encadrant.service_id else None,
-                    'speciality': encadrant.speciality,
                     'created_at': encadrant.created_at.isoformat()
                 },
                 service_name='profile-service'
@@ -406,7 +488,7 @@ class EncadrantViewSet(viewsets.ModelViewSet):
         except Exception as e:
             logger.error(f"Failed to publish encadrant.created event: {e}")
 
-        return response
+        return Response(EncadrantSerializer(encadrant).data, status=status.HTTP_201_CREATED)
 
     def update(self, request, *args, **kwargs):
         """Update encadrant and publish encadrant.updated event"""
