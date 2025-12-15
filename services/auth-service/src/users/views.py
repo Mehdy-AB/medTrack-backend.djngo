@@ -24,10 +24,7 @@ from auth_service.jwt_utils import (
     decode_refresh_token, InvalidTokenError, TokenExpiredError
 )
 from auth_service.middleware import get_current_user, require_auth, require_role
-from auth_service.events import (
-    publish_user_created, publish_user_updated, publish_user_role_changed,
-    publish_session_revoked, publish_password_changed, publish_user_deleted
-)
+from auth_service.events import publish_event, EventTypes
 
 logger = logging.getLogger(__name__)
 
@@ -126,7 +123,18 @@ def register(request):
     user = serializer.save()
     
     # Publish event
-    publish_user_created(user)
+    # Publish event
+    publish_event(
+        EventTypes.USER_CREATED,
+        {
+            'user_id': str(user.id),
+            'email': user.email,
+            'role': user.role,
+            'first_name': user.first_name,
+            'last_name': user.last_name,
+        },
+        'auth-service'
+    )
     
     # Generate tokens
     response_data = get_tokens_response(user, request)
@@ -229,7 +237,15 @@ def current_user(request):
     
     if changed_fields:
         user.save()
-        publish_user_updated(user, changed_fields)
+        publish_event(
+            'user.updated',
+            {
+                'user_id': str(user.id),
+                'email': user.email,
+                'changed_fields': changed_fields
+            },
+            'auth-service'
+        )
         AuditLog.log(
             action='Profile updated',
             user=user,
@@ -270,7 +286,7 @@ def change_password(request):
     # Revoke all other sessions
     Session.objects.filter(user=user, revoked=False).update(revoked=True)
     
-    publish_password_changed(user)
+    publish_event(EventTypes.USER_PASSWORD_CHANGED, {'user_id': str(user.id), 'email': user.email}, 'auth-service')
     AuditLog.log(
         action='Password changed',
         user=user,
@@ -362,7 +378,7 @@ def user_detail(request, user_id):
         email = user.email
         user_id_str = str(user.id)
         user.delete()
-        publish_user_deleted(user_id_str, email)
+        publish_event(EventTypes.USER_DELETED, {'user_id': user_id_str, 'email': email}, 'auth-service')
         AuditLog.log(
             action='User deleted',
             user=get_current_user(request),
@@ -389,9 +405,17 @@ def user_detail(request, user_id):
         user.save()
         
         if 'role' in changed_fields:
-            publish_user_role_changed(user, old_role, user.role)
+            publish_event(
+                'user.role_changed', # Missing in EventTypes
+                {'user_id': str(user.id), 'email': user.email, 'old_role': old_role, 'new_role': user.role},
+                'auth-service'
+            )
         else:
-            publish_user_updated(user, changed_fields)
+             publish_event(
+                'user.updated',
+                {'user_id': str(user.id), 'email': user.email, 'changed_fields': changed_fields},
+                'auth-service'
+            )
         
         AuditLog.log(
             action='User updated by admin',
@@ -451,7 +475,11 @@ def revoke_session(request, session_id):
     session.revoked = True
     session.save()
     
-    publish_session_revoked(session, user)
+    publish_event(
+        'user.session_revoked', # Missing
+        {'session_id': str(session.id), 'user_id': str(user.id)},
+        'auth-service'
+    )
     AuditLog.log(
         action='Session revoked',
         user=user,
