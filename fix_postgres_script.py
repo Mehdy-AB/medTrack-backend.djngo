@@ -1,4 +1,6 @@
-#!/bin/sh
+import os
+
+content = """#!/bin/sh
 # init-multiple-databases.sh
 # Creates multiple PostgreSQL databases on container startup
 
@@ -21,3 +23,11 @@ if [ -n "$POSTGRES_MULTIPLE_DATABASES" ]; then
     done
     echo "Multiple databases created successfully!"
 fi
+"""
+
+path = r"c:\Users\mahdi\Desktop\medtrack\medTrack-backend.djngo\infrastructure\postgres\init-multiple-databases.sh"
+
+with open(path, 'w', newline='\n') as f:
+    f.write(content)
+
+print("File written with LF line endings.")

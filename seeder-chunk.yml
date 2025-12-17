@@ -1,0 +1,22 @@
+
+  # ============================================
+  # SEEDER - Initial Data Population
+  # ============================================
+  seeder:
+    build: 
+      context: ./services/auth-service
+    container_name: seeder
+    volumes:
+      - ./seed_data.py:/app/seed_data.py
+    command: python /app/seed_data.py
+    networks:
+      - backend
+    depends_on:
+      auth-service:
+        condition: service_started
+      profile-service:
+        condition: service_started
+      core-service:
+        condition: service_started
+    profiles:
+      - seed
