@@ -150,11 +150,106 @@ class OfferViewSet(viewsets.ModelViewSet):
             status=status.HTTP_201_CREATED
         )
     
-    # The perform_create method is no longer needed as the custom create method handles it.
-    # def perform_create(self, serializer):
-    #     """Set created_by from JWT token."""
-    #     user_id = get_user_id_from_request(self.request)
-    #     serializer.save(created_by=user_id)
+    def update(self, request, pk=None):
+        """Update an entire offer (PUT - encadrant/admin only)."""
+        offer = self.get_object()
+        
+        # Check permissions
+        role = get_user_role(request)
+        user_id = get_user_id(request)
+        
+        # Only creator, encadrants, or admins can update
+        if role not in ['encadrant', 'admin'] and str(offer.created_by) != str(user_id):
+            return Response(
+                {'error': 'Only the offer creator or admins/encadrants can update offers'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = UpdateOfferRequest(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        # Update fields
+        for field, value in serializer.validated_data.items():
+            setattr(offer, field, value)
+        
+        offer.save()
+        
+        # Publish offer.updated event
+        publisher = get_event_publisher()
+        publisher.publish_offer_updated({
+            'offer_id': str(offer.id),
+            'title': offer.title,
+            'status': offer.status
+        })
+        
+        return Response(OfferSerializer(offer).data)
+    
+    def partial_update(self, request, pk=None):
+        """Partially update an offer (PATCH - encadrant/admin only)."""
+        offer = self.get_object()
+        
+        # Check permissions
+        role = get_user_role(request)
+        user_id = get_user_id(request)
+        
+        # Only creator, encadrants, or admins can update
+        if role not in ['encadrant', 'admin'] and str(offer.created_by) != str(user_id):
+            return Response(
+                {'error': 'Only the offer creator or admins/encadrants can update offers'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = UpdateOfferRequest(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        
+        # Update fields
+        for field, value in serializer.validated_data.items():
+            setattr(offer, field, value)
+        
+        offer.save()
+        
+        # Publish offer.updated event
+        publisher = get_event_publisher()
+        publisher.publish_offer_updated({
+            'offer_id': str(offer.id),
+            'title': offer.title,
+            'status': offer.status
+        })
+        
+        return Response(OfferSerializer(offer).data)
+    
+    def destroy(self, request, pk=None):
+        """Delete an offer (DELETE - creator/admin only)."""
+        offer = self.get_object()
+        
+        # Check permissions
+        role = get_user_role(request)
+        user_id = get_user_id(request)
+        
+        # Only creator or admins can delete
+        if role != 'admin' and str(offer.created_by) != str(user_id):
+            return Response(
+                {'error': 'Only the offer creator or admins can delete offers'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        offer_id = str(offer.id)
+        offer_title = offer.title
+        
+        # Delete the offer
+        offer.delete()
+        
+        # Publish offer.deleted event
+        publisher = get_event_publisher()
+        publisher.publish_event(
+            routing_key='core.offer.deleted',
+            payload={
+                'offer_id': offer_id,
+                'title': offer_title
+            }
+        )
+        
+        return Response(status=status.HTTP_204_NO_CONTENT)
     
     @action(detail=True, methods=['patch'], url_path='status')
     def update_status(self, request, pk=None):
