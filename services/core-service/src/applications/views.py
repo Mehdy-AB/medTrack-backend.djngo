@@ -104,7 +104,7 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         
         # Create application
         application = Application.objects.create(
-            student_id=user_id or serializer.validated_data.get('student_id'),
+            student_id=serializer.validated_data['student_id'],
             offer=offer,
             status=Application.STATUS_SUBMITTED,
             metadata={
