@@ -2,6 +2,7 @@
     "service": {
         "name": "profile-service",
         "id": "profile-service-1",
+        "address": "profile-service",
         "port": 8000,
         "check": {
             "http": "http://profile-service:8000/health",

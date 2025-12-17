@@ -79,7 +79,7 @@ class AuthServiceClient(ServiceClient):
     
     def get_user_details(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get user (encadrant) details by ID."""
-        return self._make_request(f"/users/{user_id}")
+        return self._make_request(f"/auth/api/v1/users/{user_id}")
 
 
 class ProfileServiceClient(ServiceClient):
@@ -91,15 +91,15 @@ class ProfileServiceClient(ServiceClient):
     
     def get_service_details(self, service_id: str) -> Optional[Dict[str, Any]]:
         """Get service details by ID."""
-        return self._make_request(f"/services/{service_id}")
+        return self._make_request(f"/profile/api/services/{service_id}/")
     
     def get_establishment_details(self, establishment_id: str) -> Optional[Dict[str, Any]]:
         """Get establishment details by ID."""
-        return self._make_request(f"/establishments/{establishment_id}")
+        return self._make_request(f"/profile/api/establishments/{establishment_id}/")
     
     def get_student_details(self, student_id: str) -> Optional[Dict[str, Any]]:
         """Get student details by ID."""
-        return self._make_request(f"/students/{student_id}")
+        return self._make_request(f"/profile/api/students/{student_id}/")
 
 
 
