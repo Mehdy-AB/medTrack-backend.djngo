@@ -369,14 +369,14 @@ def user_detail(request, user_id):
     Manage specific user (admin only).
     For internal service-to-service calls (no auth), only GET is allowed.
     """
-    user_data = getattr(request, 'user_data', {})
+    user_data = getattr(request, 'user_data', None)
     
     # For GET requests with no user_data (internal service calls), allow it
     # For other requests or authenticated users, require admin role
     if request.method == 'GET' and not user_data:
         # Internal service-to-service call
         pass
-    elif user_data.get('role') != 'admin':
+    elif not user_data or user_data.get('role') != 'admin':
         return Response(
             {'error': 'Admin access required', 'code': 'FORBIDDEN'},
             status=status.HTTP_403_FORBIDDEN

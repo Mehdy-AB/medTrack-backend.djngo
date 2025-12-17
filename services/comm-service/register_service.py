@@ -16,6 +16,8 @@ def register_service():
     
     service_config['service']['name'] = service_name
     service_config['service']['id'] = f"{service_name}-{os.environ.get('HOSTNAME', '1')}"
+    # CRITICAL: Use service name as address for Docker DNS, not IP
+    service_config['service']['address'] = service_name
     
     consul_url = f"http://{consul_host}:{consul_port}/v1/agent/service/register"
     
