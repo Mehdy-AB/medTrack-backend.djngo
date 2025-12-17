@@ -19,9 +19,11 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
     EXEMPT_PATHS = [
         '/health',
         '/metrics',
+        '/auth/health',
         '/auth/api/v1/login',
         '/auth/api/v1/register',
         '/auth/api/v1/refresh',
+        '/auth/api/v1/users/',  # Allow internal service-to-service user lookups
     ]
     
     def process_request(self, request):

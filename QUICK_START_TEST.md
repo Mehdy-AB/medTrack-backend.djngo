@@ -96,7 +96,7 @@ docker-compose logs comm-service-consumer --tail=20
 GET http://localhost/core/offers/YOUR_OFFER_ID
 Authorization: Bearer YOUR_TOKEN_HERE
 ```
-
+7aff8f27-69de-475f-bc2f-c7afee9a006e
 **Response includes data from OTHER services via Consul:**
 ```json
 {

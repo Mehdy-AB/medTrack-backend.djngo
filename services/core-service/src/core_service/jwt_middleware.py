@@ -110,6 +110,8 @@ class JWTAuthMiddleware:
     EXEMPT_PATHS = [
         '/health',
         '/metrics',
+        '/core/health',
+        '/core/',  # Allow internal service-to-service calls
     ]
     
     def __init__(self, get_response):

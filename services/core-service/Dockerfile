@@ -14,6 +14,9 @@ COPY src/ .
 COPY register_service.py .
 COPY consul/ ./consul/
 
+# Create staticfiles directory to avoid Django warning
+RUN mkdir -p /app/staticfiles
+
 EXPOSE 8000
 
 CMD python manage.py migrate --noinput && \

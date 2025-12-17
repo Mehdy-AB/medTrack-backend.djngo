@@ -24,10 +24,19 @@ class ConsulServiceDiscovery:
                 service = services[0]['Service']
                 address = service['Address']
                 port = service['Port']
+                
+                # Fallback: if address is empty, use service name (Docker DNS)
+                if not address or address == '':
+                    print(f"Consul returned empty address for {service_name}, using Docker DNS fallback")
+                    address = service_name
+                
                 return f"http://{address}:{port}"
         except Exception as e:
             print(f"Error discovering service {service_name}: {e}")
-        return None
+        
+        # Final fallback: use service name directly
+        print(f"Consul discovery failed for {service_name}, using direct service name")
+        return f"http://{service_name}:8000"
 
 
 class ServiceClient:
