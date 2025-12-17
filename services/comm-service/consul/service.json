@@ -2,6 +2,7 @@
     "service": {
         "name": "comm-service",
         "id": "comm-service-1",
+        "address": "comm-service",
         "port": 8000,
         "check": {
             "http": "http://comm-service:8000/health",

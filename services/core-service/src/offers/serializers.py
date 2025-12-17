@@ -204,24 +204,26 @@ class OfferWithDetails(serializers.ModelSerializer):
             }
     
     def get_created_by_encadrant(self, obj):
-        """Get user (encadrant) details from AUTH-SERVICE."""
+        """Get encadrant details from PROFILE-SERVICE."""
         if not obj.created_by:
             return None
         
         try:
-            auth_client = get_auth_client()
-            user_data = auth_client.get_user_details(str(obj.created_by))
+            profile_client = get_profile_client()
+            encadrant_data = profile_client.get_encadrant_details(str(obj.created_by))
             
-            if not user_data:
+            if not encadrant_data:
                 return None
             
             return {
-                'id': user_data.get('id'),
-                'first_name': user_data.get('first_name'),
-                'last_name': user_data.get('last_name')
+                'id': encadrant_data.get('id'),
+                'user_id': encadrant_data.get('user_id'),
+                'first_name': encadrant_data.get('first_name'),
+'last_name': encadrant_data.get('last_name'),
+                'specialty': encadrant_data.get('specialty'),
             }
         except Exception as e:
-            print(f"Error fetching user details: {e}")
+            print(f"Error fetching encadrant details: {e}")
             return None
     
     def get_application_count(self, obj):

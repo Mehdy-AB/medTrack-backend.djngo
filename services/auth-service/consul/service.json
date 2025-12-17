@@ -2,6 +2,7 @@
     "service": {
         "name": "auth-service",
         "id": "auth-service-1",
+        "address": "auth-service",
         "port": 8000,
         "check": {
             "http": "http://auth-service:8000/health",
