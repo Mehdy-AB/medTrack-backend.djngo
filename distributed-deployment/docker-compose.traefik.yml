@@ -1,0 +1,35 @@
+# ============================================
+# MACHINE 2: Traefik API Gateway
+# ============================================
+# Deploy this on your API Gateway server
+# 
+# IMPORTANT: Update the IP addresses in traefik/dynamic.yml to point to Machine 5
+#
+# Usage: docker-compose -f docker-compose.traefik.yml up -d
+
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"       # HTTP
+      - "443:443"     # HTTPS (optional)
+      - "8090:8090"   # Dashboard
+    command:
+      - "--api.dashboard=true"
+      - "--api.insecure=true"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--providers.file.directory=/etc/traefik/dynamic"
+      - "--providers.file.watch=true"
+      - "--log.level=INFO"
+    volumes:
+      - ./traefik:/etc/traefik/dynamic:ro
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

@@ -1,0 +1,30 @@
+# ============================================
+# MACHINE 3: Consul Service Discovery
+# ============================================
+# Deploy this on your Consul server
+# Replace MACHINE_X_IP placeholders with actual IPs before deployment
+#
+# Usage: docker-compose -f docker-compose.consul.yml up -d
+
+version: '3.8'
+
+services:
+  consul:
+    image: hashicorp/consul:1.18
+    container_name: consul
+    restart: unless-stopped
+    ports:
+      - "8500:8500"   # HTTP API & UI
+      - "8600:8600/udp"  # DNS
+    command: agent -server -ui -node=server-1 -bootstrap-expect=1 -client=0.0.0.0
+    volumes:
+      - consul_data:/consul/data
+    healthcheck:
+      test: ["CMD", "consul", "info"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  consul_data:

@@ -126,3 +126,10 @@ RABBITMQ_PASSWORD = os.environ.get('RABBITMQ_PASSWORD', 'password')
 # ============================================
 CONSUL_HOST = os.environ.get('CONSUL_HOST', 'consul')
 CONSUL_PORT = int(os.environ.get('CONSUL_PORT', 8500))
+
+# ============================================
+# JWT CONFIGURATION (Shared Secret)
+# ============================================
+JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY', 'shared-jwt-secret-key-change-in-production-12345')
+JWT_ALGORITHM = os.environ.get('JWT_ALGORITHM', 'HS256')
+
