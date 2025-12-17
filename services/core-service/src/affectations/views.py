@@ -132,6 +132,59 @@ class AffectationViewSet(viewsets.ModelViewSet):
         response_serializer = AffectationWithDetails(affectation)
         return Response(response_serializer.data, status=status.HTTP_201_CREATED)
     
+    
+    def update(self, request, pk=None):
+        """Update affectation (admin only)."""
+        affectation = self.get_object()
+        
+        serializer = CreateAffectationRequest(data=request.data, partial=False)
+        serializer.is_valid(raise_exception=True)
+        
+        # Update metadata if provided
+        if 'metadata' in serializer.validated_data:
+            affectation.metadata = serializer.validated_data['metadata']
+            affectation.save()
+        
+        # Publish affectation.updated event
+        publisher = get_event_publisher()
+        publisher.publish_event(
+            routing_key='core.affectation.updated',
+            payload={
+                'affectation_id': str(affectation.id),
+                'student_id': str(affectation.student_id),
+                'offer_id': str(affectation.offer.id)
+            }
+        )
+        
+        response_serializer = AffectationWithDetails(affectation)
+        return Response(response_serializer.data)
+    
+    def partial_update(self, request, pk=None):
+        """Partially update affectation (admin only)."""
+        affectation = self.get_object()
+        
+        serializer = CreateAffectationRequest(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        
+        # Update metadata if provided
+        if 'metadata' in serializer.validated_data:
+            affectation.metadata = serializer.validated_data['metadata']
+            affectation.save()
+        
+        # Publish affectation.updated event
+        publisher = get_event_publisher()
+        publisher.publish_event(
+            routing_key='core.affectation.updated',
+            payload={
+                'affectation_id': str(affectation.id),
+                'student_id': str(affectation.student_id),
+                'offer_id': str(affectation.offer.id)
+            }
+        )
+        
+        response_serializer = AffectationWithDetails(affectation)
+        return Response(response_serializer.data)
+    
     def destroy(self, request, pk=None):
         """Remove an affectation."""
         affectation = self.get_object()
