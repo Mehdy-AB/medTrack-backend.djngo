@@ -41,24 +41,24 @@ http:
     auth-service:
       loadBalancer:
         servers:
-          - url: "http://MACHINE_5_IP:8001"
+          - url: "http://172.20.10.3:8001"
 
     profile-service:
       loadBalancer:
         servers:
-          - url: "http://MACHINE_5_IP:8002"
+          - url: "http://172.20.10.3:8002"
 
     core-service:
       loadBalancer:
         servers:
-          - url: "http://MACHINE_5_IP:8003"
+          - url: "http://172.20.10.3:8003"
 
     eval-service:
       loadBalancer:
         servers:
-          - url: "http://MACHINE_5_IP:8004"
+          - url: "http://172.20.10.3:8004"
 
     comm-service:
       loadBalancer:
         servers:
-          - url: "http://MACHINE_5_IP:8005"
+          - url: "http://172.20.10.3:8005"

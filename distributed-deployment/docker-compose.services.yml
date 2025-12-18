@@ -89,10 +89,10 @@ services:
       - DATABASE_PORT=5432
       - DATABASE_USER=postgres
       - DATABASE_PASSWORD=postgres
-      - RABBITMQ_HOST=MACHINE_1_IP
+      - RABBITMQ_HOST=172.20.10.4
       - RABBITMQ_USER=admin
       - RABBITMQ_PASSWORD=password
-      - CONSUL_HOST=MACHINE_3_IP
+      - CONSUL_HOST=172.20.10.4
       - CONSUL_PORT=8500
       - SECRET_KEY=auth-secret-key-change-in-production
       - JWT_SECRET_KEY=shared-jwt-secret-key-change-in-production-12345
@@ -120,10 +120,10 @@ services:
       - DATABASE_PORT=5432
       - DATABASE_USER=postgres
       - DATABASE_PASSWORD=postgres
-      - RABBITMQ_HOST=MACHINE_1_IP
+      - RABBITMQ_HOST=172.20.10.4
       - RABBITMQ_USER=admin
       - RABBITMQ_PASSWORD=password
-      - CONSUL_HOST=MACHINE_3_IP
+      - CONSUL_HOST=172.20.10.4
       - CONSUL_PORT=8500
       - JWT_SECRET_KEY=shared-jwt-secret-key-change-in-production-12345
     depends_on:
@@ -150,10 +150,10 @@ services:
       - DATABASE_PORT=5432
       - DATABASE_USER=postgres
       - DATABASE_PASSWORD=postgres
-      - RABBITMQ_HOST=MACHINE_1_IP
+      - RABBITMQ_HOST=172.20.10.4
       - RABBITMQ_USER=admin
       - RABBITMQ_PASSWORD=password
-      - CONSUL_HOST=MACHINE_3_IP
+      - CONSUL_HOST=172.20.10.4
       - CONSUL_PORT=8500
       - JWT_SECRET_KEY=shared-jwt-secret-key-change-in-production-12345
     depends_on:
@@ -180,10 +180,10 @@ services:
       - DATABASE_PORT=5432
       - DATABASE_USER=postgres
       - DATABASE_PASSWORD=postgres
-      - RABBITMQ_HOST=MACHINE_1_IP
+      - RABBITMQ_HOST=172.20.10.4
       - RABBITMQ_USER=admin
       - RABBITMQ_PASSWORD=password
-      - CONSUL_HOST=MACHINE_3_IP
+      - CONSUL_HOST=172.20.10.4
       - CONSUL_PORT=8500
       - JWT_SECRET_KEY=shared-jwt-secret-key-change-in-production-12345
     depends_on:
@@ -210,10 +210,10 @@ services:
       - DATABASE_PORT=5432
       - DATABASE_USER=postgres
       - DATABASE_PASSWORD=postgres
-      - RABBITMQ_HOST=MACHINE_1_IP
+      - RABBITMQ_HOST=172.20.10.4
       - RABBITMQ_USER=admin
       - RABBITMQ_PASSWORD=password
-      - CONSUL_HOST=MACHINE_3_IP
+      - CONSUL_HOST=172.20.10.4
       - CONSUL_PORT=8500
       - JWT_SECRET_KEY=shared-jwt-secret-key-change-in-production-12345
     depends_on:
