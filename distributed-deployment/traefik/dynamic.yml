@@ -1,9 +1,4 @@
-# ============================================
-# Traefik Dynamic Configuration
-# ============================================
-# IMPORTANT: Replace MACHINE_5_IP with the actual IP of your backend services machine
-#
-# Example: If Machine 5 IP is 192.168.1.105, replace all instances of MACHINE_5_IP
+
 
 http:
   routers:
