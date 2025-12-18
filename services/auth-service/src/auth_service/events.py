@@ -136,22 +136,15 @@ class RabbitMQClient:
 
     def publish_event(self, event_type: str, payload: Dict[str, Any], service_name: str):
         """
-        Publish an event to RabbitMQ
-
-        Args:
-            event_type: Event type (routing key) - e.g., "student.created"
-            payload: Event data as dictionary
-            service_name: Name of the service publishing the event
-
-        Example:
-            rabbitmq.publish_event(
-                event_type=EventTypes.STUDENT_CREATED,
-                payload={'student_id': '123', 'email': 'student@example.com'},
-                service_name='profile-service'
-            )
+        Publish an event to RabbitMQ with automatic reconnection
         """
-        if not self.channel:
-            self.connect()
+        # Ensure we are connected
+        if not self.connection or self.connection.is_closed or not self.channel or self.channel.is_closed:
+            try:
+                self.connect()
+            except Exception as e:
+                logger.error(f"❌ Failed to reconnect to RabbitMQ: {e}")
+                return # Fail silently on reconnect failure to not block caller
 
         # Create event envelope
         event = {
@@ -174,11 +167,26 @@ class RabbitMQClient:
                     content_type="application/json"
                 )
             )
-
             logger.info(f"📤 Published event: {event_type} from {service_name}")
+        except (pika.exceptions.AMQPConnectionError, pika.exceptions.AMQPChannelError) as e:
+            logger.warning(f"⚠️  RabbitMQ connection lost while publishing: {e}. Retrying once...")
+            try:
+                self.connect()
+                self.channel.basic_publish(
+                    exchange=self.EXCHANGE_NAME,
+                    routing_key=event_type,
+                    body=message,
+                    properties=pika.BasicProperties(
+                        delivery_mode=2,
+                        content_type="application/json"
+                    )
+                )
+                logger.info(f"📤 Published event {event_type} after retry")
+            except Exception as re_e:
+                logger.error(f"❌ Failed to publish event {event_type} after retry: {re_e}")
+                # We don't raise here to avoid crashing the whole request if RabbitMQ is down
         except Exception as e:
-            logger.error(f"❌ Failed to publish event {event_type}: {e}")
-            raise
+            logger.error(f"❌ Unexpected error publishing event {event_type}: {e}")
 
     def declare_queue(self, queue_name: str, routing_keys: list):
         """

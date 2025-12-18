@@ -23,7 +23,6 @@ class JWTAuthenticationMiddleware(MiddlewareMixin):
         '/auth/api/v1/login',
         '/auth/api/v1/register',
         '/auth/api/v1/refresh',
-        '/auth/api/v1/users/',  # Allow internal service-to-service user lookups
     ]
     
     def process_request(self, request):

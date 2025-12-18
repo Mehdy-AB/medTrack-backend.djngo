@@ -1,9 +1,11 @@
 """
 ViewSets for PROFILE-SERVICE endpoints
 """
-from rest_framework import viewsets, status
-from rest_framework.decorators import action, api_view
+from django.db import models
+from rest_framework import viewsets, status, filters
+from rest_framework.decorators import action, api_view, permission_classes
 from rest_framework.response import Response
+from rest_framework.permissions import IsAuthenticated
 from django.utils.decorators import method_decorator
 from .models import Establishment, Service, Student, Encadrant
 from .serializers import (
@@ -11,6 +13,7 @@ from .serializers import (
     StudentSerializer, StudentCreateSerializer,
     EncadrantSerializer, EncadrantCreateSerializer
 )
+from django_filters.rest_framework import DjangoFilterBackend
 from .service_client import AuthServiceClient
 from .events import publish_event, EventTypes, get_rabbitmq_client
 from profile_service.jwt_middleware import require_role
@@ -30,6 +33,33 @@ try:
     logger.info("✅ RabbitMQ client initialized for PROFILE-SERVICE")
 except Exception as e:
     logger.warning(f"⚠️  RabbitMQ not available: {e}")
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+@require_role('admin')
+def get_dashboard_stats(request):
+    """
+    Get global statistics for admin dashboard
+    """
+    try:
+        total_students = Student.objects.count()
+        total_encadrants = Encadrant.objects.count()
+        total_establishments = Establishment.objects.count()
+        total_services = Service.objects.count()
+
+        # Group by establishment type
+        establishment_types = Establishment.objects.values('type').annotate(count=models.Count('id'))
+        types_data = {t['type'] if t['type'] else 'Autre': t['count'] for t in establishment_types}
+
+        return Response({
+            'total_students': total_students,
+            'total_encadrants': total_encadrants,
+            'total_establishments': total_establishments,
+            'total_services': total_services,
+            'establishment_types': types_data,
+        })
+    except Exception as e:
+        logger.error(f"Error fetching dashboard stats: {e}")
+        return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 class EstablishmentViewSet(viewsets.ModelViewSet):
@@ -47,6 +77,9 @@ class EstablishmentViewSet(viewsets.ModelViewSet):
     """
     queryset = Establishment.objects.all()
     serializer_class = EstablishmentSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['type', 'wilaya', 'city']
+    search_fields = ['name', 'code', 'city', 'wilaya', 'address']
 
     @require_role('admin', 'encadrant')
     def create(self, request, *args, **kwargs):
@@ -62,10 +95,13 @@ class EstablishmentViewSet(viewsets.ModelViewSet):
                 event_type=EventTypes.ESTABLISHMENT_CREATED,
                 payload={
                     'establishment_id': str(establishment.id),
+                    'code': establishment.code,
                     'name': establishment.name,
                     'city': establishment.city,
+                    'wilaya': establishment.wilaya,
                     'address': establishment.address,
                     'type': establishment.type,
+                    'email': establishment.email,
                     'created_at': establishment.created_at.isoformat()
                 },
                 service_name='profile-service'
@@ -90,10 +126,13 @@ class EstablishmentViewSet(viewsets.ModelViewSet):
                 event_type=EventTypes.ESTABLISHMENT_UPDATED,
                 payload={
                     'establishment_id': str(establishment.id),
+                    'code': establishment.code,
                     'name': establishment.name,
                     'city': establishment.city,
+                    'wilaya': establishment.wilaya,
                     'address': establishment.address,
                     'type': establishment.type,
+                    'email': establishment.email,
                     'updated_at': establishment.updated_at.isoformat()
                 },
                 service_name='profile-service'
@@ -225,8 +264,12 @@ class StudentViewSet(viewsets.ModelViewSet):
     """
     queryset = Student.objects.all()
     serializer_class = StudentSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['university', 'program', 'year_level']
+    search_fields = ['first_name', 'last_name', 'email', 'student_number', 'university']
 
     def get_serializer_class(self):
+        logger.info(f"Action: {self.action}")
         if self.action in ['create', 'update', 'partial_update']:
             return StudentCreateSerializer
         return StudentSerializer
@@ -413,6 +456,9 @@ class EncadrantViewSet(viewsets.ModelViewSet):
     """
     queryset = Encadrant.objects.all()
     serializer_class = EncadrantSerializer
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter]
+    filterset_fields = ['establishment', 'service', 'speciality']
+    search_fields = ['first_name', 'last_name', 'email', 'cin', 'speciality']
 
     def get_serializer_class(self):
         if self.action in ['create', 'update', 'partial_update']:
@@ -423,7 +469,9 @@ class EncadrantViewSet(viewsets.ModelViewSet):
     def create(self, request, *args, **kwargs):
         """Create encadrant: Create Auth User -> Create Profile (Admin only)"""
         serializer = self.get_serializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
+        if not serializer.is_valid():
+            logger.error(f"❌ Encadrant creation validation failed: {serializer.errors}")
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
         
         # Extract auth data
         email = serializer.validated_data.get('email')

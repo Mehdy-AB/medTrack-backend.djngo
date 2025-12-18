@@ -115,7 +115,8 @@ class AuthServiceClient:
         REAL API CALL: GET {AUTH_SERVICE_URL}/auth/api/v1/users/{user_id}
         """
         try:
-            auth_url = _consul.get_service_url('auth-service', 'http://auth-service:8000')
+            auth_url = 'http://auth-service:8000'
+            # auth_url = _consul.get_service_url('auth-service', 'http://auth-service:8000')
             response = requests.get(
                 f"{auth_url}/auth/api/v1/users/{user_id}",
                 timeout=5
@@ -132,7 +133,9 @@ class AuthServiceClient:
         Requires Admin/Encadrant token
         """
         try:
-            auth_url = _consul.get_service_url('auth-service', 'http://auth-service:8000')
+            # Force use of internal K8s/Docker DNS for reliability
+            auth_url = "http://auth-service:8000"
+            # auth_url = _consul.get_service_url('auth-service', 'http://auth-service:8000')
             
             headers = {
                 'Authorization': token if token.startswith('Bearer ') else f'Bearer {token}',

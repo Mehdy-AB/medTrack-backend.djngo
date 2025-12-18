@@ -111,7 +111,6 @@ class JWTAuthMiddleware:
         '/health',
         '/metrics',
         '/profile/health',
-        '/profile/api/',  # Allow internal service-to-service calls
     ]
     
     def __init__(self, get_response):

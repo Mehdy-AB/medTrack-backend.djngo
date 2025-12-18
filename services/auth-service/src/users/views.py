@@ -200,15 +200,18 @@ def current_user(request):
     
     if changed_fields:
         user.save()
-        publish_event(
-            'user.updated',
-            {
-                'user_id': str(user.id),
-                'email': user.email,
-                'changed_fields': changed_fields
-            },
-            'auth-service'
-        )
+        try:
+            publish_event(
+                'user.updated',
+                {
+                    'user_id': str(user.id),
+                    'email': user.email,
+                    'changed_fields': changed_fields
+                },
+                'auth-service'
+            )
+        except Exception as e:
+            logger.error(f"❌ Failed to publish user.updated event: {e}")
         AuditLog.log(
             action='Profile updated',
             user=user,
@@ -249,7 +252,10 @@ def change_password(request):
     # Revoke all other sessions
     Session.objects.filter(user=user, revoked=False).update(revoked=True)
     
-    publish_event(EventTypes.USER_PASSWORD_CHANGED, {'user_id': str(user.id), 'email': user.email}, 'auth-service')
+    try:
+        publish_event(EventTypes.USER_PASSWORD_CHANGED, {'user_id': str(user.id), 'email': user.email}, 'auth-service')
+    except Exception as e:
+        logger.error(f"❌ Failed to publish user.password_changed event: {e}")
     AuditLog.log(
         action='Password changed',
         user=user,
@@ -279,7 +285,7 @@ def list_users(request):
     GET /auth/api/v1/users - List all users (Admin only)
     POST /auth/api/v1/users - Create new user (Admin/Encadrant only)
     """
-    user_data = getattr(request, 'user_data', {})
+    user_data = getattr(request, 'user_data', {}) or {}
     current_role = user_data.get('role')
 
     if request.method == 'POST':
@@ -306,17 +312,20 @@ def list_users(request):
         user = serializer.save()
         
         # Publish event 
-        publish_event(
-            EventTypes.USER_CREATED,
-            {
-                'user_id': str(user.id),
-                'email': user.email,
-                'role': user.role,
-                'first_name': user.first_name,
-                'last_name': user.last_name,
-            },
-            'auth-service'
-        )
+        try:
+            publish_event(
+                EventTypes.USER_CREATED,
+                {
+                    'user_id': str(user.id),
+                    'email': user.email,
+                    'role': user.role,
+                    'first_name': user.first_name,
+                    'last_name': user.last_name,
+                },
+                'auth-service'
+            )
+        except Exception as e:
+            logger.error(f"❌ Failed to publish user.created event: {e}")
         
         AuditLog.log(
             action='User created',
@@ -397,7 +406,10 @@ def user_detail(request, user_id):
         email = user.email
         user_id_str = str(user.id)
         user.delete()
-        publish_event(EventTypes.USER_DELETED, {'user_id': user_id_str, 'email': email}, 'auth-service')
+        try:
+            publish_event(EventTypes.USER_DELETED, {'user_id': user_id_str, 'email': email}, 'auth-service')
+        except Exception as e:
+            logger.error(f"❌ Failed to publish user.deleted event: {e}")
         AuditLog.log(
             action='User deleted',
             user=get_current_user(request),

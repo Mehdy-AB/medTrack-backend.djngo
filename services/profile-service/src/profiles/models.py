@@ -7,10 +7,13 @@ import uuid
 class Establishment(models.Model):
     """Hospitals/Medical establishments"""
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    code = models.CharField(max_length=100, unique=True, blank=True, null=True)
     name = models.CharField(max_length=255)
     type = models.CharField(max_length=100, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
     city = models.CharField(max_length=120, blank=True, null=True)
+    wilaya = models.CharField(max_length=120, blank=True, null=True)
+    email = models.EmailField(max_length=255, blank=True, null=True)
     phone = models.CharField(max_length=50, blank=True, null=True)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
