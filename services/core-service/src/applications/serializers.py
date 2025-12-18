@@ -9,7 +9,7 @@ class CreateApplicationRequest(serializers.Serializer):
     """Serializer for creating a new application."""
     
     offer_id = serializers.UUIDField(required=True)
-    student_id = serializers.UUIDField(required=True)
+    # student_id is extracted from JWT token, not from request
     motivation = serializers.CharField(required=False, allow_blank=True)
     document_ids = serializers.ListField(
         child=serializers.UUIDField(),

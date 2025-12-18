@@ -71,6 +71,27 @@ class ApplicationViewSet(viewsets.ModelViewSet):
     filterset_class = ApplicationFilter
     pagination_class = ApplicationPagination
     
+    def get_queryset(self):
+        """Filter applications by logged-in user (student)."""
+        queryset = super().get_queryset()
+        
+        # Get user_id from JWT token
+        user_id = get_user_id_from_request(self.request)
+        role = get_user_role(self.request)
+        
+        # Debug logging
+        print(f"[DEBUG] Applications filtering - user_id: {user_id}, role: {role}")
+        
+        # Students only see their own applications
+        if role == 'student' and user_id:
+            print(f"[DEBUG] Filtering applications for student: {user_id}")
+            queryset = queryset.filter(student_id=user_id)
+        else:
+            print(f"[DEBUG] Not filtering - showing all applications (role={role})")
+        
+        # Admins and encadrants see all applications (no filter)
+        return queryset
+    
     def get_serializer_class(self):
         """Use appropriate serializer for each action."""
         if self.action == 'retrieve':
@@ -86,7 +107,14 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         serializer = CreateApplicationRequest(data=request.data)
         serializer.is_valid(raise_exception=True)
         
+        # Get student_id from JWT token, not from request
         user_id = get_user_id_from_request(request)
+        
+        if not user_id:
+            return Response(
+                {'error': 'Authentication required'},
+                status=status.HTTP_401_UNAUTHORIZED
+            )
         
         # Verify offer exists and is active
         try:
@@ -102,9 +130,9 @@ class ApplicationViewSet(viewsets.ModelViewSet):
                 status=status.HTTP_404_NOT_FOUND
             )
         
-        # Create application
+        # Create application - use user_id from token as student_id
         application = Application.objects.create(
-            student_id=serializer.validated_data['student_id'],
+            student_id=user_id,  # Use JWT user_id instead of request data
             offer=offer,
             status=Application.STATUS_SUBMITTED,
             metadata={
@@ -136,7 +164,11 @@ class ApplicationViewSet(viewsets.ModelViewSet):
         
         # Check if student owns this application
         user_id = get_user_id_from_request(request)
-        if str(instance.student_id) != str(user_id):
+        role = get_user_role(request)
+        
+        # Encadrants and admins can update any application
+        # Students can only update their own
+        if role == 'student' and str(instance.student_id) != str(user_id):
             return Response(
                 {'error': 'You can only update your own applications'},
                 status=status.HTTP_403_FORBIDDEN
