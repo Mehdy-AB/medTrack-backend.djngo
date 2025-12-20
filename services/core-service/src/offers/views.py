@@ -40,7 +40,7 @@ def get_user_id_from_request(request):
         )
         
         return payload.get('user_id') or payload.get('sub') or payload.get('id')
-    except:
+    except (jwt.InvalidTokenError, jwt.ExpiredSignatureError, KeyError):
         return None
 
 
